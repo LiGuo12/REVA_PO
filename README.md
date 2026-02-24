@@ -14,13 +14,6 @@ Install requirements using pip:
 pip install -r requirements.txt
 ```
 
-Alternatively, to simplify deployment, we provide a Docker image with a prebuilt environment.
-
-```bash
-docker pull lguo12/aprpo-env:cu128
-docker run --rm -it --gpus all lguo12/aprpo-env:cu128
-```
-
 **2. Preparation**
 
 ### Datasets
