@@ -41,9 +41,9 @@ mimic_dataset/
 ```
 ### Pretrained Checkpoints
 
-IU-Xray: Download our pretrained checkpoints for IU-Xray from [here](https://huggingface.co/liguo12/APRPO_Weights/tree/main/iuxray).
+IU-Xray: Download our pretrained checkpoints for IU-Xray from [here](https://huggingface.co/anonymous-39kq/aprpo-weights/tree/main/APRPO_Weights/iuxray).
 
-MIMIC-CXR: Download our pretrained checkpoints for MIMIC-CXR from [here](https://huggingface.co/liguo12/APRPO_Weights/tree/main/mimic).
+MIMIC-CXR: Download our pretrained checkpoints for MIMIC-CXR from [here](https://huggingface.co/anonymous-39kq/aprpo-weights/tree/main/APRPO_Weights/mimic).
 
 ## Evaluation
 
@@ -180,7 +180,7 @@ deepspeed --num_gpus 4 train.py \
 
 #### Re-fine-tune Classifier
 
-If you want to re-fine-tune the classifier, download the pretained [Medical_MAE](https://huggingface.co/liguo12/APRPO_Weights/tree/main/Medical_MAE). Alternatively, you can download it from the [official repo](https://github.com/lambert-x/medical_mae). The classifiers we used (`mimic_cls_ckpt.pth` and `iuxray_cls_ckpt.pth`) were obtained by fine-tuning Medical_MAE on MIMIC-CXR and IU-Xray, respectively.
+If you want to re-fine-tune the classifier, download the pretained [Medical_MAE](https://huggingface.co/anonymous-39kq/aprpo-weights/tree/main/APRPO_Weights/Medical_MAE). Alternatively, you can download it from the [official repo](https://github.com/lambert-x/medical_mae). The classifiers we used (`mimic_cls_ckpt.pth` and `iuxray_cls_ckpt.pth`) were obtained by fine-tuning Medical_MAE on MIMIC-CXR and IU-Xray, respectively.
 
 update:
 
