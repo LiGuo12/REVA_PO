@@ -25,7 +25,7 @@ docker run --rm -it --gpus all lguo12/aprpo-env:cu128
 
 ### Datasets
 
-IU-Xray: Download the [IU-Xray](https://huggingface.co/datasets/liguo12/APRPO_Datasets/tree/main/iuxray_dataset) and unzip `images.zip`. 
+IU-Xray: Download the [IU-Xray](https://huggingface.co/datasets/anonymous-39kq/aprpo-datasets/tree/main/APRPO_Datasets/iuxray_dataset) and unzip `images.zip`. 
 
 After unzip, the folder looks like:
 
@@ -35,7 +35,7 @@ iuxray_dataset/
 └── annotation_with_categories.json
 ```
 
-MIMIC-CXR: Download the images of MIMIC-CXR dataset from [official website](https://physionet.org/content/mimic-cxr-jpg/2.0.0/), and download the [annotations](https://huggingface.co/datasets/liguo12/APRPO_Datasets/tree/main/mimic_dataset).
+MIMIC-CXR: Download the images of MIMIC-CXR dataset from [official website](https://physionet.org/content/mimic-cxr-jpg/2.0.0/), and download the [annotations](https://huggingface.co/datasets/anonymous-39kq/aprpo-datasets/tree/main/APRPO_Datasets/mimic_dataset).
 
 Put the annotations and images (files) from the official website into the same folder.
 
@@ -110,7 +110,7 @@ deepspeed --num_gpus 8 train.py \
   --deepspeed_config train_configs/stage3/zero_mimic_stage3.json
 ```
 
-![overview](https://github.com/LiGuo12/APRPO/blob/main/images/results.png)
+![overview](images/results.png)
 
 For clinical efficacy (CE) metrics, run:
 
