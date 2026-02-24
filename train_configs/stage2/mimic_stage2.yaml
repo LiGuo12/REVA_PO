@@ -1,0 +1,64 @@
+model:
+  arch: APRPO_stage2
+  model_type: APRPO
+  max_txt_len: 160
+  min_new_tokens: 80
+  repetition_penalty: 1.03
+  # lora configuartion
+  use_lora: True                    
+  lora_rank: 32
+  lora_alpha: 32
+  lora_dropout: 0.1
+  # all linear layers
+  lora_target_modules: ["qkv", "proj", "gate_proj", "up_proj", "down_proj", "q_proj","v_proj","k_proj","o_proj"]
+  # ZeRO optimizer configuration
+  use_zero_optimizer: True
+
+  use_rl: False
+
+  train_cls: False
+  cls_thresholds: [0.3529, 0.1281, 0.3027, 0.3251, 0.0858, 0.3657,
+                  0.1146, 0.1135, 0.2815, 0.3064, 0.3620, 0.1038,
+                  0.0351, 0.2903]
+
+  # pre-trained model
+  pretrained_cls_ckp: "/path/to/mimic/mimic_cls_ckpt.pth"
+  pretrained_stage1: "/path/to/mimic/mimic_stage1_ckpt.pth"
+  pretrained_stage2: "/path/to/mimic/mimic_stage2_ckpt.pth"
+
+  evaluate: False
+
+  dataset_name: "mimic"
+
+datasets:
+  mimic:
+    build_info:
+        storage: "/path/to/mimic-cxr-jpg/2.1.0"
+        ann_file: "/path/to/mimic/mimic_with_categories.json"
+
+run:
+  task: xray_report_generation
+  log_freq: 50
+  max_epoch: 1
+  batch_size_train: 7 # train batch size per gpu
+  batch_size_eval: 1 # eval batch size per gpu
+  num_workers: 2 # of workers for data loading
+  accum_grad_iters: 1
+
+  seed: 42
+  output_dir: "output/APRPO_stage2_MIMIC"
+
+  amp: False
+  resume_ckpt_path: null
+
+  train_splits: ["train"]
+  valid_splits: ["val"]
+  test_splits: ["test"]
+
+  device: "cuda"
+  world_size: 4   # num of gpus
+  dist_url: "env://"
+  distributed: True
+  # ZeRO optimizer configuration
+  use_zero_optimizer: True
+  deepspeed_config: "train_configs/stage2/zero_mimic_stage2.json"

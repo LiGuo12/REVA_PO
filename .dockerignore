@@ -1,0 +1,34 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Git
+.git/
+.gitignore
+
+# Outputs / logs / experiment trackers
+output/
+outputs/
+logs/
+wandb/
+mlruns/
+tmp/
+cache/
+.cache/
+
+# Datasets / checkpoints / large artifacts
+data/
+datasets/
+checkpoints/
+*.pt
+*.pth
+*.safetensors
+
+# OS junk
+.DS_Store

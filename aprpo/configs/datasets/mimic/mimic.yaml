@@ -1,0 +1,6 @@
+datasets:
+  mimic:
+    data_type: images
+    build_info:
+      storage: "/mimic"
+      ann_file: "/mimic_with_categories_sampled_10k.json"

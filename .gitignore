@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pth
+*.pt
+*.safetensors
+data/
+outputs/
+logs/
+wandb/
+.cache/
+tmp/

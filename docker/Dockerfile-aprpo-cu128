@@ -1,0 +1,30 @@
+FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel
+
+WORKDIR /workspace
+
+# System deps (keep only what you need)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    build-essential \
+    ca-certificates \
+    ffmpeg \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python deps
+COPY requirements.txt /tmp/requirements.txt
+
+# Upgrade pip
+RUN python -m pip install --upgrade pip
+
+# Install all packages except torch/torchvision/torchaudio and flash-attn first.
+RUN grep -vE '^(torch|torchvision|torchaudio|flash-attn)=' /tmp/requirements.txt > /tmp/requirements_base.txt \
+ && pip install -r /tmp/requirements_base.txt
+
+# Install flash-attn without build isolation, so it can import torch during build.
+RUN FLASH_ATTN_LINE="$(grep -E '^flash-attn==' /tmp/requirements.txt || true)" \
+ && if [ -n "$FLASH_ATTN_LINE" ]; then \
+      pip install --no-build-isolation "$FLASH_ATTN_LINE"; \
+    fi
+
+CMD ["bash"]

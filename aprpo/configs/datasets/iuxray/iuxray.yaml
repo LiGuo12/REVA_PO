@@ -1,0 +1,7 @@
+datasets:
+  iuxray:
+    data_type: images
+    build_info:
+      storage: "/iu_xray"
+      ann_file: "/annotation_with_categories.json"
+      

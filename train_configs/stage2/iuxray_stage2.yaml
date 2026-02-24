@@ -1,0 +1,64 @@
+model:
+  arch: APRPO_stage2
+  model_type: APRPO
+  max_txt_len: 100
+  min_new_tokens: 40
+  repetition_penalty: 1.05
+  # lora configuartion
+  use_lora: True                   
+  lora_rank: 32 
+  lora_alpha: 32
+  lora_dropout: 0.1
+  # all linear layers
+  lora_target_modules: ["qkv", "proj", "gate_proj", "up_proj", "down_proj", "q_proj","v_proj","k_proj","o_proj"]
+  # ZeRO optimizer configuration
+  use_zero_optimizer: True
+  
+  use_rl: False
+
+  train_cls: False
+  cls_thresholds: [0.2871, 0.0805, 0.1960, 0.2936, 0.2195, 0.0403,
+                  0.1234, 0.0136, 0.1756, 0.0408, 0.5776, 0.1970,
+                  0.1508, 0.2561]
+
+  # pre-trained model
+  pretrained_cls_ckp: "/path/to/iuxray/iuxray_cls_ckpt.pth"
+  pretrained_stage1: "/path/to/iuxray/iuxray_stage1_ckpt.pth"
+  pretrained_stage2: "/path/to/iuxray/iuxray_stage2_ckpt.pth"
+
+  evaluate: False
+
+  dataset_name: "iuxray"
+
+datasets:
+  iuxray:
+    build_info:
+          storage: "/path/to/iuxray"
+          ann_file: "/path/to/iuxray/annotation_with_categories.json"
+
+run:
+  task: xray_report_generation
+  log_freq: 50
+  max_epoch: 5
+  batch_size_train: 7 # train batch size per gpu
+  batch_size_eval: 1 # eval batch size per gpu
+  num_workers: 2 # of workers for data loading
+  accum_grad_iters: 1
+
+  seed: 42
+  output_dir: "output/APRPO_stage2_IUXRay"
+
+  amp: False
+  resume_ckpt_path: null
+
+  train_splits: ["train"]
+  valid_splits: ["val"]
+  test_splits: ["test"]
+
+  device: "cuda"
+  world_size: 4 # number of gpus
+  dist_url: "env://"
+  distributed: True
+  # ZeRO optimizer configuration
+  use_zero_optimizer: True
+  deepspeed_config: "train_configs/stage2/zero_iuxray_stage2.json"

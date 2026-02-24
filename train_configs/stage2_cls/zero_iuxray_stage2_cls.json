@@ -1,0 +1,29 @@
+{   "zero_allow_untested_optimizer": true,
+    "zero_optimization": {
+        "stage": 1,
+        "contiguous_gradients": true,
+        "reduce_bucket_size": 5e8,
+        "allgather_bucket_size": 5e8
+    },
+    "fp16": {
+        "enabled": true,
+        "loss_scale": 0,
+        "loss_scale_window": 1000,
+        "initial_scale_power": 10,
+        "hysteresis": 2,
+        "min_loss_scale": 1
+    },
+    "scheduler": {
+        "type": "WarmupCosineLR",
+        "params": {
+                "warmup_min_ratio": 0.0,
+                "warmup_num_steps": 32,
+                "total_num_steps": 640,
+                "warmup_type": "linear",
+                "cos_min_ratio": 0.1
+        }
+    },
+    "train_batch_size": 64,
+    "train_micro_batch_size_per_gpu": 64,
+    "gradient_clipping": 1.0
+}

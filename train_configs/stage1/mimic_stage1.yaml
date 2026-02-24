@@ -1,0 +1,50 @@
+model:
+  arch: APRPO_stage1
+  model_type: APRPO
+  max_txt_len: 160
+  min_new_tokens: 80
+  repetition_penalty: 1.03
+  # ZeRO optimizer configuration
+  use_zero_optimizer: True
+
+  use_lora: False  
+  use_rl: False
+
+  # pre-trained model
+  pretrained_stage1: "/path/to//mimic/mimic_stage1_ckpt.pth"
+
+  evaluate: False
+
+  dataset_name: "mimic"
+datasets:
+  mimic:
+    build_info:
+        storage: "/path/to/mimic-cxr-jpg/2.1.0"
+        ann_file: "/path/to/mimic/mimic_with_categories.json"
+
+run:
+  task: xray_report_generation
+  log_freq: 50
+  max_epoch: 10
+  batch_size_train: 8 # train batch size per gpu
+  batch_size_eval: 1 # eval batch size per gpu
+  num_workers: 2 # of workers for data loading
+  accum_grad_iters: 1
+
+  seed: 42
+  output_dir: "output/APRPO_stage1_MIMIC"
+
+  amp: False
+  resume_ckpt_path: null
+
+  train_splits: ["train"]
+  valid_splits: ["val"]
+  test_splits: ["test"]
+
+  device: "cuda"
+  world_size: 4
+  dist_url: "env://"
+  distributed: True
+  # ZeRO optimizer configuration
+  use_zero_optimizer: True
+  deepspeed_config: "train_configs/stage1/zero_mimic_stage1.json"

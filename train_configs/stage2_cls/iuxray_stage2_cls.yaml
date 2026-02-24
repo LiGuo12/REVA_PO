@@ -1,0 +1,52 @@
+model:
+  arch: Medical_MAE
+  model_type: Medical_MAE
+
+  # ZeRO optimizer configuration
+  use_zero_optimizer: True
+  
+  use_rl: False
+  train_cls: True
+
+  vit_ckpt: "/path/to/Medical_MAE/vit-b_CXR_0.5M_mae_CheXpert.pth"
+  pretrained_cls_ckpt_mimic: "/path/to/mimic/mimic_cls_ckpt.pth"
+
+  evaluate: False
+
+  dataset_name: "iuxray"
+
+datasets:
+  iuxray:
+    build_info:
+          storage: "/path/to/iu_xray"
+          ann_file: "/path/to/iu_xray/annotation_with_categories.json"
+
+run:
+  task: chestxray_multilabel_cls
+  init_lr_cls: 6.25e-5 
+  weight_decay_cls: 0.05 
+  log_freq: 10
+  max_epoch: 20
+  batch_size_train: 64
+  batch_size_eval: 64
+  num_workers: 2
+  accum_grad_iters: 1
+
+  seed: 42
+  output_dir: "output/APRPO_stage2_IUXRay_cls"
+
+  amp: False
+  resume_ckpt_path: null
+
+  train_splits: ["train"]
+  valid_splits: ["val"]
+  test_splits: ["test"]
+
+  device: "cuda"
+  world_size: 1 
+  dist_url: "env://"
+  distributed: True
+  # ZeRO optimizer configuration
+  use_zero_optimizer: True
+  deepspeed_config: "train_configs/stage2_cls/zero_iuxray_stage2_cls.json"
+
