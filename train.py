@@ -7,17 +7,17 @@ import random
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-import aprpo.tasks as tasks
-from aprpo.common.config import Config
-from aprpo.common.dist_utils import get_rank, init_distributed_mode
-from aprpo.common.logger import setup_logger
-from aprpo.common.registry import registry
-from aprpo.common.utils import now
-from aprpo.datasets.builders import *
-from aprpo.models import *
-from aprpo.processors import *
-from aprpo.runners import *
-from aprpo.tasks import *
+import reva_po.tasks as tasks
+from reva_po.common.config import Config
+from reva_po.common.dist_utils import get_rank, init_distributed_mode
+from reva_po.common.logger import setup_logger
+from reva_po.common.registry import registry
+from reva_po.common.utils import now
+from reva_po.datasets.builders import *
+from reva_po.models import *
+from reva_po.processors import *
+from reva_po.runners import *
+from reva_po.tasks import *
 import torchvision.transforms as transforms
 import torch
 from torchvision import transforms

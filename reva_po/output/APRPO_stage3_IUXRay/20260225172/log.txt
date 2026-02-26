@@ -1,0 +1,104 @@
+{
+    "run": {
+        "task": "xray_report_generation",
+        "log_freq": 50,
+        "max_epoch": 15,
+        "batch_size_train": 1,
+        "batch_size_eval": 1,
+        "num_workers": 2,
+        "accum_grad_iters": 1,
+        "seed": 42,
+        "output_dir": "output/APRPO_stage3_IUXRay",
+        "amp": false,
+        "resume_ckpt_path": null,
+        "train_splits": [
+            "train"
+        ],
+        "valid_splits": [
+            "val"
+        ],
+        "test_splits": [
+            "test"
+        ],
+        "device": "cuda",
+        "world_size": 1,
+        "dist_url": "env://",
+        "distributed": true,
+        "use_zero_optimizer": true,
+        "deepspeed_config": "train_configs/stage3/zero_iuxray_stage3.json",
+        "rank": 0,
+        "gpu": 0,
+        "dist_backend": "nccl"
+    },
+    "model": {
+        "model_type": "APRPO",
+        "arch": "APRPO_stage3",
+        "max_txt_len": 100,
+        "use_lora": true,
+        "lora_rank": 32,
+        "lora_alpha": 32,
+        "lora_dropout": 0.1,
+        "lora_target_modules": [
+            "qkv",
+            "proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+            "q_proj",
+            "v_proj",
+            "k_proj",
+            "o_proj"
+        ],
+        "use_zero_optimizer": true,
+        "use_rl": true,
+        "group_size": 4,
+        "update_ref_every": 3,
+        "update_old_every": 16,
+        "ent_coef": 0.001,
+        "b_min": 0.05,
+        "b_base": 0.1,
+        "b_max": 0.15,
+        "temperature": 0.7,
+        "top_k": 0,
+        "top_p": 0.9,
+        "min_new_tokens": 40,
+        "repetition_penalty": 1.05,
+        "train_cls": false,
+        "cls_thresholds": [
+            0.2871,
+            0.0805,
+            0.196,
+            0.2936,
+            0.2195,
+            0.0403,
+            0.1234,
+            0.0136,
+            0.1756,
+            0.0408,
+            0.5776,
+            0.197,
+            0.1508,
+            0.2561
+        ],
+        "use_chexbert": true,
+        "chexbert_ckpt": "/mnt/ssd4tb/code/code/checkpoint/APRPO_Weights/mimic/chexbert.pth",
+        "pretrained_cls_ckp": "/mnt/ssd4tb/code/code/checkpoint/APRPO_Weights/iuxray/iuxray_cls_ckpt.pth",
+        "pretrained_stage2": "/mnt/ssd4tb/code/code/checkpoint/APRPO_Weights/iuxray/iuxray_stage2_ckpt.pth",
+        "pretrained_stage3": "/mnt/ssd4tb/code/code/checkpoint/APRPO_Weights/iuxray/iuxray_stage3_ckpt.pth",
+        "evaluate": false,
+        "dataset_name": "iuxray"
+    },
+    "datasets": {
+        "iuxray": {
+            "data_type": "images",
+            "build_info": {
+                "storage": "/mnt/ssd4tb/datasets/research/iu_xray",
+                "ann_file": "/mnt/ssd4tb/datasets/research/iu_xray/annotation_with_categories.json"
+            }
+        }
+    }
+}
+{"train_step_epoch": 0, "train_step_iter": 0, "train_step_global_step": 0, "train_step_ts": 1772069050.9046767, "train_step_lr": 0.0, "train_step_loss": 0.18558555841445923, "train_step_rl_loss": 0.18521930277347565, "train_step_kl_loss": 0.0008530700579285622, "train_step_entropy_cur": 0.48682278394699097, "train_step_reward_mean": 0.021967750042676926, "train_step_reward_diff": 0.010407869704067707, "train_step_reward_std": 0.004201748874038458}
+{"train_step_epoch": 0, "train_step_iter": 1, "train_step_global_step": 1, "train_step_ts": 1772069054.5732193, "train_step_lr": 3.896103896103896e-08, "train_step_loss": -0.08446554094552994, "train_step_rl_loss": -0.08455457538366318, "train_step_kl_loss": 0.0006201610085554421, "train_step_entropy_cur": 0.5311276316642761, "train_step_reward_mean": 0.10733304917812347, "train_step_reward_diff": 0.17397774755954742, "train_step_reward_std": 0.062107525765895844}
+{"train_step_epoch": 0, "train_step_iter": 2, "train_step_global_step": 2, "train_step_ts": 1772069057.326269, "train_step_lr": 7.792207792207792e-08, "train_step_loss": 0.05110931769013405, "train_step_rl_loss": 0.05005614459514618, "train_step_kl_loss": 0.0014954167418181896, "train_step_entropy_cur": 0.4422456920146942, "train_step_reward_mean": 0.05443486571311951, "train_step_reward_diff": 0.08334561437368393, "train_step_reward_std": 0.031115995720028877}
+{"train_step_epoch": 0, "train_step_iter": 3, "train_step_global_step": 3, "train_step_ts": 1772069059.9843974, "train_step_lr": 1.1688311688311688e-07, "train_step_loss": 0.027245933189988136, "train_step_rl_loss": 0.026390863582491875, "train_step_kl_loss": 0.0013405994977802038, "train_step_entropy_cur": 0.48553091287612915, "train_step_reward_mean": 0.01736169122159481, "train_step_reward_diff": 0.03144419565796852, "train_step_reward_std": 0.013553586788475513}

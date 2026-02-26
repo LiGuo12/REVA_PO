@@ -33,7 +33,7 @@ run:
   accum_grad_iters: 1
 
   seed: 42
-  output_dir: "output/APRPO_stage2_IUXRay_cls"
+  output_dir: "output/REVA_stage2_IUXRay_cls"
 
   amp: False
   resume_ckpt_path: null

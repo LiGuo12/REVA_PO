@@ -1,6 +1,6 @@
 model:
-  arch: APRPO_stage3
-  model_type: APRPO
+  arch: REVA_stage3
+  model_type: REVA
   max_txt_len: 100
 
   # lora configuartion
@@ -36,6 +36,9 @@ model:
                   0.1234, 0.0136, 0.1756, 0.0408, 0.5776, 0.1970,
                   0.1508, 0.2561]
   
+  use_chexbert: False
+  chexbert_ckpt: "/path/to/iuxray/chexbert.pth"
+
   # pre-trained model
   pretrained_cls_ckp: "/path/to/iuxray/iuxray_cls_ckpt.pth"
   pretrained_stage2: "/path/to/iuxray/iuxray_stage2_ckpt.pth"
@@ -62,7 +65,7 @@ run:
   accum_grad_iters: 1
 
   seed: 42
-  output_dir: "output/APRPO_stage3_IUXRay"
+  output_dir: "output/REVA_stage3_IUXRay"
 
   amp: False
   resume_ckpt_path: null

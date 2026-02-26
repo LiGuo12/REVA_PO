@@ -1,6 +1,6 @@
 model:
-  arch: APRPO_stage1
-  model_type: APRPO
+  arch: REVA_stage1
+  model_type: REVA
   max_txt_len: 160
   min_new_tokens: 80
   repetition_penalty: 1.03
@@ -32,7 +32,7 @@ run:
   accum_grad_iters: 1
 
   seed: 42
-  output_dir: "output/APRPO_stage1_MIMIC"
+  output_dir: "output/REVA_stage1_MIMIC"
 
   amp: False
   resume_ckpt_path: null
