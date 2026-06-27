@@ -55,15 +55,15 @@ After downloading the datasets and the pre-trained checkpoints, update:
 
 Set these fields to your local paths:
 
-- `pretrained_cls_ckp` (line 43): path to `iuxray_cls_ckpt.pth`
-- `pretrained_stage2` (line 44): path to `iuxray_stage2_ckpt.pth`
-- `pretrained_stage3` (line 45): path to `iuxray_stage3_ckpt.pth`
-- `storage` (line 55): path to `iuxray_dataset/`
-- `ann_file` (line 56): path to `iuxray_dataset/annotation_with_categories.json`
+- `pretrained_cls_ckp` (line 40): path to `iuxray_cls_ckpt.pth`
+- `pretrained_stage2` (line 41): path to `iuxray_stage2_ckpt.pth`
+- `pretrained_stage3` (line 42): path to `iuxray_stage3_ckpt.pth`
+- `storage` (line 51): path to `iuxray_dataset/`
+- `ann_file` (line 52): path to `iuxray_dataset/annotation_with_categories.json`
 
 We used 8 V100 GPUs. Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/iuxray_stage3.yaml`: `world_size` (line 78)
+- `train_configs/stage3/iuxray_stage3.yaml`: `world_size` (line 74)
 - `train_configs/stage3/zero_iuxray_stage3.json`: `train_batch_size` (line 34)
 
 Run:
@@ -83,15 +83,15 @@ Update:
 
 Set these fields to your local paths:
 
-- `pretrained_cls_ckp` (line 43): path to `mimic_cls_ckpt.pth`
-- `pretrained_stage2` (line 44): path to `mimic_stage2_ckpt.pth`
-- `pretrained_stage3` (line 45): path to `mimic_stage3_ckpt.pth`
-- `storage` (line 55): path to `mimic_dataset/`
-- `ann_file` (line 56): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
+- `pretrained_cls_ckp` (line 39): path to `mimic_cls_ckpt.pth`
+- `pretrained_stage2` (line 40): path to `mimic_stage2_ckpt.pth`
+- `pretrained_stage3` (line 41): path to `mimic_stage3_ckpt.pth`
+- `storage` (line 50): path to `mimic_dataset/`
+- `ann_file` (line 51): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
 
 Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 78)
+- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 73)
 - `train_configs/stage3/zero_mimic_stage3.json`: `train_batch_size` (line 34)
 
 Run:
@@ -130,7 +130,7 @@ Update:
 `train_configs/stage1/mimic_stage1.yaml`
 
 Set these fields to your local paths:
-
+pretrained_stage2
 - `storage` (line 22): path to `mimic_dataset/`
 - `ann_file` (line 23): path to `mimic_dataset/mimic_with_categories.json`
 
@@ -211,21 +211,19 @@ Update:
 
 Set these fields to your local paths:
 
-- `use_chexbert` (line 39): set to True
-- `chexbert_ckpt` (line 40): path to `chexbert_ckpt.pth`
-- `evaluate` (line 47): set to False
-- `pretrained_cls_ckp` (line 43): path to `mimic_cls_ckpt.pth`
-- `pretrained_stage2` (line 44): path to `mimic_stage2_ckpt.pth`
+- `evaluate` (line 43): set to False
+- `pretrained_cls_ckp` (line 39): path to `mimic_cls_ckpt.pth`
+- `pretrained_stage2` (line 40): path to `mimic_stage2_ckpt.pth`
   
   Note: This line can be either a checkpoint we provide or a stage 2 checkpoint from your previous training.
-- `storage` (line 55): path to `mimic_dataset/`
-- `ann_file` (line 56): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
+- `storage` (line 50): path to `mimic_dataset/`
+- `ann_file` (line 51): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
   
   Note: This includes randomly sampling 10K instances from the MIMIC-CXR training split to reduce the runtime of RL training. The validation and test splits remain unchanged.
 
 Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 78)
+- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 73)
 - `train_configs/stage2/zero_mimic_stage2.json`: `train_batch_size` (line 34)
 
 Run:
@@ -331,19 +329,19 @@ Update:
 
 Set these fields to your local paths:
 
-- `use_chexbert` (line 39): set to True
-- `chexbert_ckpt` (line 40): path to `chexbert_ckpt.pth`
-- `evaluate` (line 47): set to False
+- `use_chexbert` (line 40): set to True
+- `chexbert_ckpt` (line 41): path to `chexbert_ckpt.pth`
+- `evaluate` (line 44): set to False
 - `pretrained_cls_ckp` (line 43): path to `iuxray_cls_ckpt.pth`
 - `pretrained_stage2` (line 44): path to `iuxray_stage2_ckpt.pth`
   
   Note: This line can be either a checkpoint we provide or a stage 2 checkpoint from your previous training.
-- `storage` (line 55): path to `iuxray_dataset/`
-- `ann_file` (line 56): path to `iuxray_dataset/annotation_with_categories.json`
+- `storage` (line 51): path to `iuxray_dataset/`
+- `ann_file` (line 52): path to `iuxray_dataset/annotation_with_categories.json`
   
 Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/iuxray_stage3.yaml`: `world_size` (line 78)
+- `train_configs/stage3/iuxray_stage3.yaml`: `world_size` (line 74)
 - `train_configs/stage2/zero_iuxray_stage2.json`: `train_batch_size` (line 34)
 
 Run:
