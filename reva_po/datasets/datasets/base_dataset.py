@@ -1,13 +1,6 @@
-"""
- Copyright (c) 2022, salesforce.com, inc.
- All rights reserved.
- SPDX-License-Identifier: BSD-3-Clause
- For full license text, see the LICENSE_Lavis file in the repo root or https://opensource.org/licenses/BSD-3-Clause
-"""
 
-import json
+
 from typing import Iterable
-
 from torch.utils.data import Dataset, ConcatDataset
 from torch.utils.data.dataloader import default_collate
 
@@ -20,7 +13,7 @@ class BaseDataset(Dataset):
         vis_root (string): Root directory of images (e.g. coco/images/)
         ann_root (string): directory to store the annotation file
         """
-        self.vis_root = vis_root/mnt/ssd4tb/code/code/R2-LLM_stage3_iuxray_3B/minigpt4/processorscessor
+        self.vis_root = vis_root
         self.text_processor = text_processor
 
         self._add_instance_ids()

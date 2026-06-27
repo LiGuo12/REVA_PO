@@ -309,6 +309,7 @@ class REVA_stage3(BaseModel):
         B = len(gt_texts)
         image_cls = samples["image_cls"] 
 
+        # categories = samples.get("categories")
         # ------------------------------------------------------------
         # 1) Predict categories using a frozen classifier to guide prompting
         # ------------------------------------------------------------
@@ -502,7 +503,6 @@ class REVA_stage3(BaseModel):
                 print("Load Stage 3 Checkpoint: {}".format(ckpt_path))
                 ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
                 msg = model.load_state_dict(ckpt['model'], strict=False)
-                
         return model
     
 # REVA Stage 2 Classifier-Guided SFT 

@@ -1,4 +1,4 @@
-# APRPO: Adaptive KL and Periodic Reference Update for Reinforcement Learning in Radiology Report Generation
+# REVA-PO: Stabilizing Reinforcement Learning for Chest X-ray Report Generation
 
 ## Overview
 
@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 ### Datasets
 
-IU-Xray: Download the [IU-Xray](https://huggingface.co/datasets/anonymous-39kq/aprpo-datasets/tree/main/APRPO_Datasets/iuxray_dataset) and unzip `images.zip`. 
+IU-Xray: Download the [IU-Xray](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets/tree/main/iuxray_dataset) and unzip `images.zip`. 
 
 After unzip, the folder looks like:
 
@@ -28,7 +28,7 @@ iuxray_dataset/
 └── annotation_with_categories.json
 ```
 
-MIMIC-CXR: Download the images of MIMIC-CXR dataset from [official website](https://physionet.org/content/mimic-cxr-jpg/2.0.0/), and download the [annotations](https://huggingface.co/datasets/anonymous-39kq/aprpo-datasets/tree/main/APRPO_Datasets/mimic_dataset).
+MIMIC-CXR: Download the images of MIMIC-CXR dataset from [official website](https://physionet.org/content/mimic-cxr-jpg/2.0.0/), and download the [annotations](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets/tree/main/mimic_dataset).
 
 Put the annotations and images (files) from the official website into the same folder.
 
@@ -41,9 +41,9 @@ mimic_dataset/
 ```
 ### Pretrained Checkpoints
 
-IU-Xray: Download our pretrained checkpoints for IU-Xray from [here](https://huggingface.co/anonymous-39kq/aprpo-weights/tree/main/APRPO_Weights/iuxray).
+IU-Xray: Download our pretrained checkpoints for IU-Xray from [here](https://huggingface.co/liguo12/REVA_PO_Weights/tree/main/iuxray).
 
-MIMIC-CXR: Download our pretrained checkpoints for MIMIC-CXR from [here](https://huggingface.co/anonymous-39kq/aprpo-weights/tree/main/APRPO_Weights/mimic).
+MIMIC-CXR: Download our pretrained checkpoints for MIMIC-CXR from [here](https://huggingface.co/liguo12/REVA_PO_Weights/tree/main/mimic).
 
 ## Evaluation
 
@@ -55,15 +55,15 @@ After downloading the datasets and the pre-trained checkpoints, update:
 
 Set these fields to your local paths:
 
-- `pretrained_cls_ckp` (line 40): path to `iuxray_cls_ckpt.pth`
-- `pretrained_stage2` (line 41): path to `iuxray_stage2_ckpt.pth`
-- `pretrained_stage3` (line 42): path to `iuxray_stage3_ckpt.pth`
-- `storage` (line 52): path to `iuxray_dataset/`
-- `ann_file` (line 53): path to `iuxray_dataset/annotation_with_categories.json`
+- `pretrained_cls_ckp` (line 43): path to `iuxray_cls_ckpt.pth`
+- `pretrained_stage2` (line 44): path to `iuxray_stage2_ckpt.pth`
+- `pretrained_stage3` (line 45): path to `iuxray_stage3_ckpt.pth`
+- `storage` (line 55): path to `iuxray_dataset/`
+- `ann_file` (line 56): path to `iuxray_dataset/annotation_with_categories.json`
 
 We used 8 V100 GPUs. Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/iuxray_stage3.yaml`: `world_size` (line 75)
+- `train_configs/stage3/iuxray_stage3.yaml`: `world_size` (line 78)
 - `train_configs/stage3/zero_iuxray_stage3.json`: `train_batch_size` (line 34)
 
 Run:
@@ -83,15 +83,15 @@ Update:
 
 Set these fields to your local paths:
 
-- `pretrained_cls_ckp` (line 40): path to `mimic_cls_ckpt.pth`
-- `pretrained_stage2` (line 41): path to `mimic_stage2_ckpt.pth`
-- `pretrained_stage3` (line 42): path to `mimic_stage3_ckpt.pth`
-- `storage` (line 52): path to `mimic_dataset/`
-- `ann_file` (line 53): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
+- `pretrained_cls_ckp` (line 43): path to `mimic_cls_ckpt.pth`
+- `pretrained_stage2` (line 44): path to `mimic_stage2_ckpt.pth`
+- `pretrained_stage3` (line 45): path to `mimic_stage3_ckpt.pth`
+- `storage` (line 55): path to `mimic_dataset/`
+- `ann_file` (line 56): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
 
 Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 75)
+- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 78)
 - `train_configs/stage3/zero_mimic_stage3.json`: `train_batch_size` (line 34)
 
 Run:
@@ -108,17 +108,15 @@ deepspeed --num_gpus 8 train.py \
 For clinical efficacy (CE) metrics, run:
 
 ```bash
-python calculate_ce_metrics.py --data_root /path/to/mimic_dataset
+python compute_ce.py --data_root /path/to/mimic_dataset
 ```
-
-This can take several hours because CheXpert-based label extraction (14 categories) from reports is slow.
 
 By default, the script computes CE metrics for the latest evaluation outputs. To compute CE metrics for a previous run, specify the run timestamp:
 
 ```bash
-python calculate_ce_metrics.py --data_root /path/to/mimic_dataset  --run_ts <timestamp>
+python compute_ce.py --data_root /path/to/mimic_dataset  --run_ts <timestamp>
 # Example:
-python calculate_ce_metrics.py --data_root /path/to/mimic_dataset --run_ts 20260106175
+python compute_ce.py --data_root /path/to/mimic_dataset --run_ts 20260106175
 ```
 
 ## Training
@@ -180,7 +178,7 @@ deepspeed --num_gpus 4 train.py \
 
 #### Re-fine-tune Classifier
 
-If you want to re-fine-tune the classifier, download the pretained [Medical_MAE](https://huggingface.co/anonymous-39kq/aprpo-weights/tree/main/APRPO_Weights/Medical_MAE). Alternatively, you can download it from the [official repo](https://github.com/lambert-x/medical_mae). The classifiers we used (`mimic_cls_ckpt.pth` and `iuxray_cls_ckpt.pth`) were obtained by fine-tuning Medical_MAE on MIMIC-CXR and IU-Xray, respectively.
+If you want to re-fine-tune the classifier, download the pretained [Medical_MAE](https://huggingface.co/liguo12/REVA_PO_Weights/tree/main/Medical_MAE). Alternatively, you can download it from the [official repo](https://github.com/lambert-x/medical_mae). The classifiers we used (`mimic_cls_ckpt.pth` and `iuxray_cls_ckpt.pth`) were obtained by fine-tuning Medical_MAE on MIMIC-CXR and IU-Xray, respectively.
 
 update:
 
@@ -213,19 +211,21 @@ Update:
 
 Set these fields to your local paths:
 
-- `evaluate` (line 44): set to False
-- `pretrained_cls_ckp` (line 40): path to `mimic_cls_ckpt.pth`
-- `pretrained_stage2` (line 41): path to `mimic_stage2_ckpt.pth`
+- `use_chexbert` (line 39): set to True
+- `chexbert_ckpt` (line 40): path to `chexbert_ckpt.pth`
+- `evaluate` (line 47): set to False
+- `pretrained_cls_ckp` (line 43): path to `mimic_cls_ckpt.pth`
+- `pretrained_stage2` (line 44): path to `mimic_stage2_ckpt.pth`
   
   Note: This line can be either a checkpoint we provide or a stage 2 checkpoint from your previous training.
-- `storage` (line 52): path to `mimic_dataset/`
-- `ann_file` (line 53): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
+- `storage` (line 55): path to `mimic_dataset/`
+- `ann_file` (line 56): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
   
   Note: This includes randomly sampling 10K instances from the MIMIC-CXR training split to reduce the runtime of RL training. The validation and test splits remain unchanged.
 
 Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 75)
+- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 78)
 - `train_configs/stage2/zero_mimic_stage2.json`: `train_batch_size` (line 34)
 
 Run:
@@ -331,17 +331,19 @@ Update:
 
 Set these fields to your local paths:
 
-- `evaluate` (line 44): set to False
-- `pretrained_cls_ckp` (line 40): path to `iuxray_cls_ckpt.pth`
-- `pretrained_stage2` (line 41): path to `iuxray_stage2_ckpt.pth`
+- `use_chexbert` (line 39): set to True
+- `chexbert_ckpt` (line 40): path to `chexbert_ckpt.pth`
+- `evaluate` (line 47): set to False
+- `pretrained_cls_ckp` (line 43): path to `iuxray_cls_ckpt.pth`
+- `pretrained_stage2` (line 44): path to `iuxray_stage2_ckpt.pth`
   
   Note: This line can be either a checkpoint we provide or a stage 2 checkpoint from your previous training.
-- `storage` (line 52): path to `iuxray_dataset/`
-- `ann_file` (line 53): path to `iuxray_dataset/annotation_with_categories.json`
+- `storage` (line 55): path to `iuxray_dataset/`
+- `ann_file` (line 56): path to `iuxray_dataset/annotation_with_categories.json`
   
 Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/iuxray_stage3.yaml`: `world_size` (line 75)
+- `train_configs/stage3/iuxray_stage3.yaml`: `world_size` (line 78)
 - `train_configs/stage2/zero_iuxray_stage2.json`: `train_batch_size` (line 34)
 
 Run:

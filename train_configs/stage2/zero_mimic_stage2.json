@@ -31,7 +31,7 @@
                 "warmup_type": "linear"
         }
      },
-    "train_batch_size": 7,
+    "train_batch_size": 28,
     "train_micro_batch_size_per_gpu": 7,
     "gradient_clipping": 1.0
 }

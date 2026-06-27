@@ -18,10 +18,7 @@ from reva_po.models import *
 from reva_po.processors import *
 from reva_po.runners import *
 from reva_po.tasks import *
-import torchvision.transforms as transforms
 import torch
-from torchvision import transforms
-import torch.distributed as dist
 import socket
 import torch.multiprocessing as mp 
 
@@ -89,12 +86,14 @@ def main():
 
     # set after init_distributed_mode() to only log on master.
     setup_logger()
+    
     # logging.getLogger("torch.distributed").setLevel(logging.ERROR)
     cfg.pretty_print()
     task = tasks.setup_task(cfg)
     print("cfg: ", cfg)
     datasets = task.build_datasets(cfg)
     model = task.build_model(cfg)
+    
     # define arguments, required by deepspeed
     args = parse_args()
     args.train_batch_size = cfg.run_cfg.batch_size_train * cfg.run_cfg.world_size

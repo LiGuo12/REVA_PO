@@ -1,10 +1,3 @@
-"""
- Copyright (c) 2022, salesforce.com, inc.
- All rights reserved.
- SPDX-License-Identifier: BSD-3-Clause
- For full license text, see the LICENSE_Lavis file in the repo root or https://opensource.org/licenses/BSD-3-Clause
-"""
-
 import datetime
 import json
 import logging
@@ -33,12 +26,7 @@ from reva_po.datasets.datasets.dataloader_utils import (
 from reva_po.utils.lr_decay import param_groups_lrd
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
-
 import deepspeed
-
-from PIL import Image
-
-from tqdm import tqdm
 import json
 import gc
 
@@ -82,7 +70,7 @@ class RunnerBase:
         self.temperature = cfg.config.model.get("temperature", 0.7)
         self.update_ref_every = cfg.config.model.get("update_ref_every", 3)
         self.update_old_every = cfg.config.model.get("update_old_every", 16)
-        self.ent_coef = cfg.config.model.get("ent_coef", 0.001)
+        self.ent_coef = cfg.config.model.get("ent_coef", 0.0)
         self.b_min = cfg.config.model.get("b_min", 0.5)
         self.b_base = cfg.config.model.get("b_base", 1.0)
         self.b_max = cfg.config.model.get("b_max", 1.5)
@@ -96,6 +84,11 @@ class RunnerBase:
         if cfg.config.model.use_zero_optimizer:
             print("Starting ZeRO initialization...")
             print(f"Deepspeed.initialize args: {cmd_args}")
+
+            if dist.is_initialized():
+                print("Waiting for all ranks to finish loading checkpoint...")
+                dist.barrier()
+                print("All ranks ready, starting deepspeed.initialize()")
 
             num_parameters = 0
             # print("Trainable param:")
@@ -143,10 +136,12 @@ class RunnerBase:
             self._optimizer = self.zero_optimizer
             if self.ds_scheduler is not None:
                 print("Deepspeed initialized scheduler: ", self.ds_scheduler)
-                try:
-                    iters_per_epoch = len(self.dataloaders['train'])
-                except (AttributeError, TypeError):
-                    iters_per_epoch = 10000
+                iters_per_epoch = self.config.run_cfg.get("iters_per_epoch", None)
+                if iters_per_epoch is None:
+                    try:
+                        iters_per_epoch = len(self.dataloaders['train'])
+                    except (AttributeError, TypeError):
+                        iters_per_epoch = 10000
                 
                 self.ds_scheduler.iters_per_epoch = iters_per_epoch
                 self._lr_sched = self.ds_scheduler
@@ -416,6 +411,8 @@ class RunnerBase:
         valid_splits = self.config.run_cfg.get("valid_splits", [])
         if len(valid_splits) == 0:
             logging.info("No validation splits found.")
+        return valid_splits
+
         return valid_splits
 
     @property
@@ -909,7 +906,7 @@ class RunnerBase:
         # Broadcast the state_dict to all ranks
         if dist.is_available() and dist.is_initialized():
             with torch.no_grad():
-                for t in model.state_dict().values():   # 覆盖参数 + buffers
+                for t in model.state_dict().values():
                     if isinstance(t, torch.Tensor):
                         dist.broadcast(t, src=0)
             dist.barrier()

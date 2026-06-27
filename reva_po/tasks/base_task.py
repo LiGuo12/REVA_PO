@@ -1,15 +1,5 @@
-"""
- Copyright (c) 2022, salesforce.com, inc.
- All rights reserved.
- SPDX-License-Identifier: BSD-3-Clause
- For full license text, see the LICENSE_Lavis file in the repo root or https://opensource.org/licenses/BSD-3-Clause
-"""
-
 import logging
 import os
-
-# import deepspeed
-
 import torch
 import torch.distributed as dist
 from reva_po.common.dist_utils import get_rank, get_world_size, is_main_process, is_dist_avail_and_initialized
@@ -120,15 +110,15 @@ class BaseTask:
         step_log_fn=None,
         update_ref_every: int = 3,
         update_old_every: int = 16,
-        ent_coef=1e-3,
+        ent_coef=0.0,
         b_min=0.05,
         b_base=0.10,
         b_max=0.15,
         output_dir=None,
     ):  
         if use_rl:
-            print("Use APRPO RL training loop")
-            return self.aprpo_rl_train_loop(
+            print("Use REVA-PO RL training loop")
+            return self.revapo_rl_train_loop(
                 epoch=epoch,
                 iters_per_epoch=lr_scheduler.iters_per_epoch,
                 model=model,
@@ -192,26 +182,6 @@ class BaseTask:
             cuda_enabled=cuda_enabled,
             accum_grad_iters=accum_grad_iters,
         )
-
-    def dapo_rl_train_loop(
-        self,
-        epoch,
-        iters_per_epoch,
-        model,
-        data_loader,
-        optimizer,
-        lr_scheduler,
-        start_iters=None,
-        cuda_enabled=True,
-        accum_grad_iters=1,
-        epsilon_low = 0.2,
-        epsilon_high = 0.28,
-        scaler=None,
-        use_amp=False,
-        log_freq=50,
-        use_zero_optimizer=False,
-    ):
-        pass
 
     def _train_inner_loop(
         self,

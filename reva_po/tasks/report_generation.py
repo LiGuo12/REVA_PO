@@ -1,9 +1,3 @@
-"""
- Copyright (c) 2022, salesforce.com, inc.
- All rights reserved.
- SPDX-License-Identifier: BSD-3-Clause
- For full license text, see the LICENSE_Lavis file in the repo root or https://opensource.org/licenses/BSD-3-Clause
-"""
 from __future__ import annotations
 import logging
 import torch
@@ -28,14 +22,11 @@ import os
 from tqdm import tqdm
 from pathlib import Path
 import json, gzip
-from collections import OrderedDict
-from typing import Dict, Optional, Union, List
-import torch.nn as nn
-import pandas as pd
-import CheXpert_labeler.CheXbert.src.utils as utils
-from CheXpert_labeler.CheXbert.src.models.bert_labeler import bert_labeler
-from CheXpert_labeler.CheXbert.src.constants import CONDITIONS, PAD_IDX
-from transformers import BertTokenizer
+from typing import List
+import concurrent.futures
+from typing import List, Sequence
+from radgraph import F1RadGraph
+
 
 
 @registry.register_task("chestxray_multilabel_cls")
@@ -473,25 +464,31 @@ class XrayReportGenerate(BaseTask):
         self.ref_state_dict = None
         self._last_eval_payload = None
         self._last_eval_metrics = None
+        self._node_group = None
+        self._local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        # DeepSpeed launcher does not set LOCAL_WORLD_SIZE; fall back to
+        # device count so per-node groups are built correctly.
+        self._local_world_size = int(
+            os.environ.get("LOCAL_WORLD_SIZE", torch.cuda.device_count() or 1)
+        )
 
-        self.chexbert = None
-        is_rank0 = (not is_dist_avail_and_initialized()) or dist.get_rank() == 0
-        if (cfg is not None) and is_rank0:
-            use_chexbert = cfg.config.model.get("use_chexbert", False)
-            if use_chexbert:
-                ckpt = cfg.config.model.get("chexbert_ckpt", None)
-                if ckpt is None:
-                    raise ValueError("chexbert_ckpt is required when use_chexbert=True")
-                dev = cfg.config.model.get(
-                    "chexbert_device",
-                    "cpu",
-                )
-                bs = int(cfg.config.model.get("chexbert_bs", 16))
-                self.chexbert = CheXbertBatch(
-                    checkpoint_path=ckpt,
-                    device=dev,
-                    batch_size=bs,
-                )
+        if (cfg is not None):
+            # Build node-local process group so all ranks in the same node can
+            # do gather/scatter for inference.  dist.new_group() MUST
+            # be called by every process, so we do this unconditionally when
+            # distributed is available.
+            if is_dist_avail_and_initialized():
+                world_size = dist.get_world_size()
+                global_rank = dist.get_rank()
+                num_nodes = world_size // self._local_world_size
+                for node_i in range(num_nodes):
+                    ranks = list(range(
+                        node_i * self._local_world_size,
+                        (node_i + 1) * self._local_world_size,
+                    ))
+                    group = dist.new_group(ranks=ranks, backend="gloo")
+                    if global_rank in ranks:
+                        self._node_group = group
 
     def get_last_eval_payload(self):
         """After the evaluation is completed, the main process can read the complete sample-level output of the most recent evaluation."""
@@ -508,7 +505,6 @@ class XrayReportGenerate(BaseTask):
     def get_ref_state_dict(self, model):
         # Extract only merger parameters (deepcopy for safety)
         return {k: v.detach().clone().cpu() for k, v in model.named_parameters() if "lora" in k or "merger" in k or v.requires_grad}
-        # return {k: v.detach().clone().cpu() for k, v in model.named_parameters() if "merger" in k and v.requires_grad}
 
     def get_lora_state_dict_cuda(self, model, device=None):
         if device is None:
@@ -516,6 +512,32 @@ class XrayReportGenerate(BaseTask):
         return {k: v.detach().clone().to(device) 
                 for k, v in model.named_parameters() 
                 if "lora" in k or "merger" in k or v.requires_grad}
+
+    @property
+    def reward_executor(self) -> concurrent.futures.ThreadPoolExecutor:
+        """Lazy single-worker thread pool for async reward computation.
+
+        One worker is enough: rewards are produced one step at a time, and we
+        just want this CPU work to overlap with GPU forward passes in the main
+        thread. Using a *thread* (not process) pool is intentional:
+        - threads share the same CUDA / NCCL context, so DDP is unaffected.
+        - forking new processes from inside a DDP worker is unsafe on some
+          systems (NCCL handles are not fork-safe).
+        - PyTorch releases the GIL during every CUDA kernel launch, so the
+          reward thread gets real CPU time while the GPU runs forward passes.
+        """
+        if not hasattr(self, "_reward_executor"):
+            self._reward_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        return self._reward_executor
+
+    def _submit_reward(
+        self,
+        reward_fn,
+        pred_texts: List[str],
+        gt_texts: List[str],
+    ) -> concurrent.futures.Future:
+        """Submit reward_fn to the background executor."""
+        return self.reward_executor.submit(reward_fn, pred_texts, gt_texts)
 
     @contextmanager
     def use_lora_params(self, model, lora_state_dict, ref=False):
@@ -630,8 +652,9 @@ class XrayReportGenerate(BaseTask):
                 - "predicted_reports": list[str] length N
                 - "gt_reports": list[str] length B (before repeat)
                 - "output_ids": Tensor [N, T]
-            rewards:
-                Tensor [N] on the same device as output_ids.
+            reward_future:
+                concurrent.futures.Future whose .result() returns a float32
+                Tensor [N] of rewards (CPU). Call .result() before step 2.7.
         """
 
         # Fetch one batch (B examples) from the dataloader iterator.
@@ -653,18 +676,21 @@ class XrayReportGenerate(BaseTask):
         pred_texts = outputs["predicted_reports"]
         gt_texts = [gt for gt in outputs["gt_reports"] for _ in range(group_size)]
         
-        generated_ids = outputs["output_ids"]
-        device = generated_ids.device
-
-        # Compute rewards for each generated candidate.
-        rewards  = reward_fn(pred_texts, gt_texts)
-        rewards = rewards.to(device)
-
-        return samples, outputs, rewards
+        # Submit reward computation to a background thread so it overlaps with
+        # the GPU forward passes that follow in the training loop.
+        # The caller must call .result() before rewards are first used (step 2.7).
+        reward_future = self._submit_reward(reward_fn, pred_texts, gt_texts)
+        return samples, outputs, reward_future
 
     def logprobs_from_logits(self, logits, labels):
         # logits: [batch, seq_len, vocab_size]
-        # label: [batch, seq_len]
+        # labels: [batch, seq_len]
+        #
+        # Prompt tokens include <|image|> (ID 128256) which is one beyond the
+        # lm_head output size (128256 → valid range 0-128255).  Clamp before
+        # gathering; those positions are zeroed by loss_mask anyway.
+        vocab_size = logits.shape[-1]
+        labels = labels.clamp(0, vocab_size - 1)
         if logits.dtype in [torch.float32, torch.float64]:
             logits_labels = torch.gather(logits, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
             logsumexp_values = torch.logsumexp(logits, dim=-1)
@@ -672,7 +698,7 @@ class XrayReportGenerate(BaseTask):
         else:
             logprobs_labels = []
             for row_logits, row_labels in zip(logits, labels):
-                row_logprobs = F.log_softmax(row_logits, dim=-1) # [batch, seq_len, vocab_size]
+                row_logprobs = F.log_softmax(row_logits, dim=-1)
                 row_logprobs_labels = row_logprobs.gather(dim=-1, index=row_labels.unsqueeze(-1)).squeeze(-1)
                 logprobs_labels.append(row_logprobs_labels)
             logprobs_labels = torch.stack(logprobs_labels)
@@ -691,7 +717,7 @@ class XrayReportGenerate(BaseTask):
         # print("Loading best checkpoint message: ", msg)
         return model
     
-    def aprpo_rl_train_loop(
+    def revapo_rl_train_loop(
         self,
         epoch,
         iters_per_epoch,
@@ -729,6 +755,9 @@ class XrayReportGenerate(BaseTask):
         use_amp = scaler is not None
         dtype = next(model.parameters()).dtype
         print(f"use_amp: {use_amp}, dtype: {dtype}")
+
+        if not hasattr(data_loader, "__next__"):
+            data_loader = iter(data_loader)
 
         # ============================================================
         # 0) Every M epochs: load "best checkpoint" into current model
@@ -837,7 +866,7 @@ class XrayReportGenerate(BaseTask):
                 # 2.1) Sample candidate reports with old policy and score reward
                 #      group_size = G candidates per input example
                 # ============================================================
-                samples, outputs, rewards = self.sample_candidates(
+                samples, outputs, reward_future = self.sample_candidates(
                     data_loader,
                     model,
                     group_size,
@@ -873,10 +902,16 @@ class XrayReportGenerate(BaseTask):
                 image_grid_thw = outputs['image_grid_thw']
 
                 # repeat image features to match N = B*G
-                pixel_values_repeat = pixel_values.repeat_interleave(group_size, dim=0)
+                B_imgs = image_grid_thw.shape[0]
+                P = pixel_values.shape[0] // B_imgs
+                pixel_values_repeat = (
+                    pixel_values.reshape(B_imgs, P, pixel_values.shape[-1])
+                    .repeat_interleave(group_size, dim=0)
+                    .reshape(B_imgs * group_size * P, pixel_values.shape[-1])
+                )
                 image_grid_thw_repeat = image_grid_thw.repeat_interleave(group_size, dim=0)
                 assert len(pred_texts) == len(gt_texts)
-                
+
                 # N = B*G
                 num_outputs = len(gt_texts)
                 batch_size = len(gt_texts) // group_size
@@ -925,7 +960,7 @@ class XrayReportGenerate(BaseTask):
                             pixel_values=pixel_values_repeat,
                             image_grid_thw=image_grid_thw_repeat
                         )
-                    
+
                 logits_old = outputs_old.logits             # [N, T, V]
                 shift_logits_old = logits_old[:, :-1, :]    # [N, T-1, V]
                 shift_logits_old.div_(temperature)          # temperature scaling
@@ -963,7 +998,7 @@ class XrayReportGenerate(BaseTask):
                     pixel_values=pixel_values_repeat,
                     image_grid_thw=image_grid_thw_repeat
                 )
-
+                
                 logits = outputs_current.logits            # [N, T, V]
                 shift_logits = logits[:, :-1, :]           # [N, T-1, V]
                 shift_logits.div_(temperature)
@@ -975,6 +1010,10 @@ class XrayReportGenerate(BaseTask):
                 #   rewards: [N] where N = B*G
                 #   advantages: normalize within each group of size G
                 # ============================================================
+                # Await reward future submitted in sample_candidates; it has been
+                # running in a background thread while the GPU did steps 2.4-2.6.
+                rewards = reward_future.result().to(device)
+                
                 advantages = torch.zeros_like(rewards)
                 for j in range(batch_size):
                     group_rewards = rewards[j*group_size:(j+1)*group_size]
@@ -1038,6 +1077,7 @@ class XrayReportGenerate(BaseTask):
                 entropy_seq_ref = (entropy_token_ref * loss_mask_f).sum(dim=1) / (loss_mask_f.sum(dim=1).clamp_min(1e-8))
                 entropy_seq_ref = entropy_seq_ref.detach()  # no gradient through beta construction
                 
+
                 # current policy entropy (keep gradient)
                 logits_cur = shift_logits                                            # [N, L, V]
                 logsumexp_cur   = torch.logsumexp(logits_cur, dim=-1)                # [N, L]
@@ -1141,7 +1181,7 @@ class XrayReportGenerate(BaseTask):
                 # 2.14) Refresh old policy snapshot every N update steps
                 #   old_lora_state_dict is used as pi_old in the ratio
                 # ============================================================
-                if update_steps % update_old_every == 0:
+                if update_steps > 0 and update_steps % update_old_every == 0:
                     old_lora_state_dict = self.get_lora_state_dict(model)
 
                 # free intermediate tensors to reduce peak memory
@@ -1555,20 +1595,6 @@ class XrayReportGenerate(BaseTask):
                 # update metric
                 val_metrics.update(eval_results)
 
-                if getattr(self, "chexbert", None) is not None:
-                    preds_text = [p for (p, _) in valid_pairs]
-                    gts_text = [g for (_, g) in valid_pairs]
-
-                    pred_labels = self.chexbert(preds_text)  # list of dict
-                    gt_labels = self.chexbert(gts_text)
-
-                    f1 = self.chexbert_micro_f1_pos(
-                        pred_labels, gt_labels, treat_uncertain_as_positive=False
-                    )
-                    val_metrics["F1"] = f1
-                else:
-                    pass
-
                 agg_metrics = 0.0
                 count = 0
                 for metric, score in eval_results.items():
@@ -1578,8 +1604,21 @@ class XrayReportGenerate(BaseTask):
                 if count > 0:
                     agg_metrics /= count
                 
-                if "F1" in val_metrics and val_metrics["F1"] is not None:
-                    agg_metrics += 0.3 * float(val_metrics.get("F1", 0.0))
+                # ---- RadGraph ER ----
+                try:
+                    rg_er = self.compute_radgraph_er_mean(
+                        predictions=[res[i][0] for i in res.keys()],   
+                        ground_truths=[gts[i][0] for i in gts.keys()],  
+                        batch_size=32,
+                        reward_level="all",
+                        model_type="radgraph-xl",
+                    )
+                    val_metrics["RG_ER"] = float(rg_er)
+                except Exception as e:
+                    print(f"[warn] RadGraph ER evaluation failed: {e}")
+
+                if "RG_ER" in val_metrics and val_metrics["RG_ER"] is not None:
+                        agg_metrics += 0.1 * float(val_metrics.get("RG_ER", 0.0))
                 val_metrics["agg_metrics"] = float(agg_metrics)
 
                 metrics_str = "Metrics |"
@@ -1601,13 +1640,23 @@ class XrayReportGenerate(BaseTask):
             except Exception as e:
                 print(f"Error computing NLP metrics: {e}")
 
-
         # Add sample statistics to metrics
         val_metrics.update({
             'valid_samples': valid_samples,
             'empty_samples': empty_samples,
             'total_samples': len(predictions)
         })
+
+        # RadGraph cache: drop scorer to free GPU memory
+        try:
+            cache = getattr(self, "_eval_rg_scorer_cache", None)
+            if cache is not None:
+                cache.clear()
+                delattr(self, "_eval_rg_scorer_cache")
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+
         return val_metrics
 
     def get_scorer(self):
@@ -1644,47 +1693,77 @@ class XrayReportGenerate(BaseTask):
                 eval_res[method] = score
         return eval_res
 
-    def chexbert_micro_f1_pos(
+    def _get_eval_rg_scorer(self, reward_level: str = "all", model_type: str = "radgraph-xl") -> F1RadGraph:
+        key = (reward_level, model_type)
+        cache = getattr(self, "_eval_rg_scorer_cache", None)
+        if cache is None:
+            cache = {}
+            self._eval_rg_scorer_cache = cache
+        if key not in cache:
+            s = F1RadGraph(reward_level=reward_level, model_type=model_type)
+            s.eval()
+            # force fp32
+            try:
+                s.float()
+            except Exception:
+                pass
+            self._eval_rg_scorer_cache[key] = s
+        return self._eval_rg_scorer_cache[key]
+    
+    @torch.no_grad()
+    def compute_radgraph_er_mean(
         self,
-        pred_labels: List[Dict[str, Optional[int]]],
-        gt_labels: List[Dict[str, Optional[int]]],
-        treat_uncertain_as_positive: bool = False,
+        predictions: Sequence[str],
+        ground_truths: Sequence[str],
+        batch_size: int = 32,
+        reward_level: str = "all",
+        model_type: str = "radgraph-xl",
     ) -> float:
         """
-        Micro-F1 over CONDITIONS, treating label==1 as positive.
-        - If gt is None for a condition, skip that condition for that sample.
-        - pred None counts as non-positive.
+        Return mean RadGraph F1 (ER) over valid (non-empty) samples.
+        This is for evaluation, so we only return the mean.
         """
-        assert len(pred_labels) == len(gt_labels)
+        assert len(predictions) == len(ground_truths)
 
-        tp = 0
-        fp = 0
-        fn = 0
+        hyps_all: List[str] = []
+        refs_all: List[str] = []
+        for p, r in zip(predictions, ground_truths):
+            if not p or not r:
+                continue
+            hyps_all.append(str(p))
+            refs_all.append(str(r))
 
-        for p, g in zip(pred_labels, gt_labels):
-            for c in CONDITIONS:
-                gv = g.get(c, None)
-                pv = p.get(c, None)
-
-                if gv is None:
-                    continue  # skip missing gt label
-
-                # define positive
-                g_pos = (gv == 1) or (treat_uncertain_as_positive and gv == -1)
-                p_pos = (pv == 1) or (treat_uncertain_as_positive and pv == -1)
-
-                if p_pos and g_pos:
-                    tp += 1
-                elif p_pos and (not g_pos):
-                    fp += 1
-                elif (not p_pos) and g_pos:
-                    fn += 1
-
-        denom = (2 * tp + fp + fn)
-        if denom == 0:
+        if len(hyps_all) == 0:
             return 0.0
-        return float(2 * tp) / float(denom)
 
+        scorer = self._get_eval_rg_scorer(reward_level=reward_level, model_type=model_type)
+
+        total = 0.0
+        cnt = 0
+
+        for start in range(0, len(hyps_all), batch_size):
+            end = min(start + batch_size, len(hyps_all))
+            hyps = hyps_all[start:end]
+            refs = refs_all[start:end]
+
+            # IMPORTANT: disable autocast to avoid FP16 overflow inside RadGraph
+            if torch.cuda.is_available():
+                with torch.cuda.amp.autocast(enabled=False):
+                    _, reward_list, _, _ = scorer(hyps=hyps, refs=refs)
+            else:
+                _, reward_list, _, _ = scorer(hyps=hyps, refs=refs)
+
+            rg_er_list = reward_list[1]
+            for s in rg_er_list:
+                v = float(s)
+                if not math.isfinite(v):
+                    v = 0.0
+                v = max(0.0, min(1.0, v))
+                total += v
+                cnt += 1
+
+        return total / max(cnt, 1)
+     
     def valid_step(self, model, samples):
         """
         Validation step that computes ITC and ITM losses without gradients
@@ -1756,7 +1835,7 @@ class XrayReportGenerate(BaseTask):
                 k.startswith(f"{split_name}/ROUGE") or \
                 k.startswith(f"{split_name}/CIDEr") or \
                 k.startswith(f"{split_name}/METEOR") or \
-                k == f"{split_name}/F1":
+                k.startswith(f"{split_name}/RG"):
                 try:
                     print(f"{k}: {float(v):.4f}")
                 except Exception:
@@ -1764,109 +1843,3 @@ class XrayReportGenerate(BaseTask):
         print("\n")
 
         return log_stats
-
-_CLASS_TO_LABEL = {0: None, 1: 1, 2: 0, 3: -1}
-
-def _clean_text_like_repo(text: Optional[str]) -> str:
-    if not isinstance(text, str):
-        return ""
-    s = text.strip()
-    ser = pd.Series([s])
-    ser = ser.replace("\n", " ", regex=True)
-    ser = ser.replace(r"\s+", " ", regex=True)
-    return str(ser.iloc[0]).strip()
-
-
-def _encode_one_like_repo(text: str, tokenizer: BertTokenizer, max_len: int = 512) -> List[int]:
-    if isinstance(text, str) and text.strip():
-        enc = tokenizer(
-            text,
-            add_special_tokens=True,
-            truncation=True,
-            max_length=max_len,
-            return_attention_mask=False,
-            return_token_type_ids=False,
-        )
-        ids = enc["input_ids"]
-        if len(ids) == max_len and ids[-1] != tokenizer.sep_token_id:
-            ids[-1] = tokenizer.sep_token_id
-        return ids
-    return [tokenizer.cls_token_id, tokenizer.sep_token_id]
-
-
-class CheXbertBatch:
-    def __init__(
-        self,
-        checkpoint_path: str,
-        device: Optional[Union[str, torch.device]] = None,
-        max_len: int = 512,
-        batch_size: int = 16,
-    ):
-        self.max_len = int(max_len)
-        self.batch_size = int(batch_size)
-
-        if device is None:
-            device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.device = torch.device(device) if not isinstance(device, torch.device) else device
-
-        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-
-        model = bert_labeler()
-
-        if self.device.type == "cuda" and torch.cuda.device_count() > 1:
-            model = nn.DataParallel(model).to(self.device)
-            checkpoint = torch.load(checkpoint_path)
-            model.load_state_dict(checkpoint["model_state_dict"])
-        else:
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
-            new_state = OrderedDict()
-            for k, v in checkpoint["model_state_dict"].items():
-                if k.startswith("module."):
-                    new_state[k[len("module."):]] = v
-                else:
-                    new_state[k] = v
-            model.load_state_dict(new_state)
-            model = model.to(self.device)
-
-        self.model = model
-        self.model.eval()
-
-    @torch.no_grad()
-    def __call__(self, reports: List[str]) -> List[Dict[str, Optional[int]]]:
-        """
-        Return: list of dict, each dict maps condition -> {1,0,-1,None}
-        """
-        outs: List[Dict[str, Optional[int]]] = []
-
-        # pre-clean and encode
-        encoded: List[List[int]] = []
-        for r in reports:
-            cleaned = _clean_text_like_repo(r)
-            ids = _encode_one_like_repo(cleaned, self.tokenizer, max_len=self.max_len)
-            encoded.append(ids)
-
-        # mini-batch forward
-        n = len(encoded)
-        for st in range(0, n, self.batch_size):
-            ed = min(st + self.batch_size, n)
-            chunk = encoded[st:ed]
-
-            seqs = [torch.tensor(x, dtype=torch.long) for x in chunk]
-            batch = torch.nn.utils.rnn.pad_sequence(
-                seqs, batch_first=True, padding_value=PAD_IDX
-            ).to(self.device)
-            lengths = [int(x.numel()) for x in seqs]
-            attn_mask = utils.generate_attention_masks(batch, lengths, self.device)
-
-            out = self.model(batch, attn_mask)  # list len=14, each (B, C)
-
-            # decode per sample
-            B = batch.size(0)
-            for i in range(B):
-                preds_i: List[Optional[int]] = []
-                for j in range(len(out)):
-                    cls = int(out[j][i].argmax(dim=-1).item())
-                    preds_i.append(_CLASS_TO_LABEL.get(cls, None))
-                outs.append({cond: preds_i[k] for k, cond in enumerate(CONDITIONS)})
-
-        return outs

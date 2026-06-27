@@ -29,7 +29,7 @@ def _modified_precision(hyp: List[str], ref: List[str], n: int) -> float:
         return 0.0
     overlap = sum(min(c, rc.get(g, 0)) for g, c in hc.items())
     total = sum(hc.values())
-    return (overlap + 1.0) / (total + 1.0)  # +1 平滑
+    return (overlap + 1.0) / (total + 1.0)  
 
 def _brevity_penalty(hlen: int, rlen: int) -> float:
     if hlen == 0:
@@ -171,7 +171,7 @@ def jsonl_to_chexpert_csv_with_lookup(
     )
     lack = [c for c in CHEXPERT_COLS if c not in chex_df.columns]
     if lack:
-        raise ValueError(f"CheXpert 输出缺列: {lack}")
+        raise ValueError(f"CheXpert output missing columns: {lack}")
 
     out = pd.concat([df[["id","subject_id","study_id","pred_report"]].reset_index(drop=True),
                      chex_df[CHEXPERT_COLS].reset_index(drop=True)], axis=1)
