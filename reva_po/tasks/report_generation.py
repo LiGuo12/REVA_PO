@@ -902,13 +902,11 @@ class XrayReportGenerate(BaseTask):
                 image_grid_thw = outputs['image_grid_thw']
 
                 # repeat image features to match N = B*G
-                B_imgs = image_grid_thw.shape[0]
-                P = pixel_values.shape[0] // B_imgs
-                pixel_values_repeat = (
-                    pixel_values.reshape(B_imgs, P, pixel_values.shape[-1])
-                    .repeat_interleave(group_size, dim=0)
-                    .reshape(B_imgs * group_size * P, pixel_values.shape[-1])
-                )
+                # Must match HF's _expand_inputs_for_generation which uses
+                # repeat_interleave(G, dim=0) on all tensors during generate().
+                # Using any other ordering breaks consistency between generation
+                # and logprob computation, corrupting the PPO ratio.
+                pixel_values_repeat = pixel_values.repeat_interleave(group_size, dim=0)
                 image_grid_thw_repeat = image_grid_thw.repeat_interleave(group_size, dim=0)
                 assert len(pred_texts) == len(gt_texts)
 
