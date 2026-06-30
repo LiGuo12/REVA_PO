@@ -901,15 +901,8 @@ class XrayReportGenerate(BaseTask):
                 pixel_values = outputs['pixel_values']
                 image_grid_thw = outputs['image_grid_thw']
 
-                # Expand pixel_values and image_grid_thw from [B, ...] to [B*G, ...]
-                # at the SAMPLE level, matching _expand_inputs_for_generation in
-                # modeling_qwen2_5_vl.py.  One sample may have multiple images (IU-Xray
-                # has 2 views), so we group all images per sample before repeating.
-                # Expand pixel_values and image_grid_thw from B to B*G samples.
-                # Count <|vision_start|> tokens in each sample's prompt to determine
-                # how many images it contains — handles variable images per sample and
-                # matches the corrected _expand_inputs_for_generation in
-                # modeling_qwen2_5_vl.py.
+                # Qwen stores pixel_values as flat patch rows. Repeat each sample's full
+                # image block G times so RL logprob recomputation matches generation
                 _VS_ID = 151652  # <|vision_start|> token id for Qwen2.5-VL
                 B_samples = len(outputs["gt_reports"])
                 _imgs_per_sample = [
