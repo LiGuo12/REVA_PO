@@ -26,7 +26,7 @@
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -2011,6 +2011,125 @@ class Qwen2_5_VLForConditionalGeneration(Qwen2_5_VLPreTrainedModel, GenerationMi
             }
         )
         return model_inputs
+
+    def _get_image_nums_and_video_nums(
+        self,
+        input_ids: Optional[torch.LongTensor],
+        inputs_embeds: Optional[torch.Tensor] = None,
+    ) -> tuple:
+        """Return (image_nums, video_nums) — number of images/videos per sample.
+
+        Ported from transformers 4.57 Qwen2_5_VLForConditionalGeneration.
+        Distinguishes images from videos by checking the token that follows
+        each <|vision_start|> marker (image_token_id vs video_token_id).
+        """
+        image_token_id = self.config.image_token_id
+        video_token_id = self.config.video_token_id
+        vision_start_token_id = self.config.vision_start_token_id
+
+        if inputs_embeds is not None:
+            embed = self.get_input_embeddings()
+            _tok = lambda tid: embed(
+                torch.tensor(tid, dtype=torch.long, device=inputs_embeds.device)
+            )
+            vision_start_mask = (inputs_embeds == _tok(vision_start_token_id))[..., 0]
+            image_mask = (inputs_embeds == _tok(image_token_id))[..., 0]
+            video_mask = (inputs_embeds == _tok(video_token_id))[..., 0]
+        else:
+            vision_start_mask = input_ids == vision_start_token_id
+            image_mask = input_ids == image_token_id
+            video_mask = input_ids == video_token_id
+
+        vision_first_mask = torch.roll(vision_start_mask, shifts=1, dims=1)
+        image_nums = torch.sum(vision_first_mask & image_mask, dim=1)
+        video_nums = torch.sum(vision_first_mask & video_mask, dim=1)
+        return image_nums, video_nums
+
+    def _expand_inputs_for_generation(
+        self,
+        expand_size: int = 1,
+        is_encoder_decoder: bool = False,
+        input_ids: Optional[torch.LongTensor] = None,
+        **model_kwargs,
+    ) -> Tuple[torch.LongTensor, Dict]:
+        # Ported from transformers 4.57 — supports expanding flat pixel_values /
+        # image_grid_thw tensors whose first dim is total patches / total images
+        # (not batch size), which the HF base-class repeat_interleave breaks.
+        if expand_size == 1:
+            return input_ids, model_kwargs
+
+        visual_keys = [
+            "pixel_values", "image_grid_thw",
+            "pixel_values_videos", "video_grid_thw", "second_per_grid_ts",
+        ]
+
+        def _expand_dict_for_generation_visual(dict_to_expand):
+            image_grid_thw = model_kwargs.get("image_grid_thw", None)
+            video_grid_thw = model_kwargs.get("video_grid_thw", None)
+            image_nums, video_nums = self._get_image_nums_and_video_nums(
+                input_ids, inputs_embeds=model_kwargs.get("inputs_embeds", None)
+            )
+
+            def _repeat_interleave_samples(x, lengths, repeat_times):
+                samples = torch.split(x, lengths)
+                repeat_args = [repeat_times] + [1] * (x.dim() - 1)
+                return torch.cat([s.repeat(*repeat_args) for s in samples], dim=0)
+
+            for key in dict_to_expand:
+                if key == "pixel_values" and image_grid_thw is not None:
+                    samples = torch.split(image_grid_thw, list(image_nums))
+                    lengths = [torch.prod(s, dim=1).sum() for s in samples]
+                    dict_to_expand[key] = _repeat_interleave_samples(
+                        dict_to_expand[key], lengths=lengths, repeat_times=expand_size
+                    )
+                elif key == "image_grid_thw":
+                    dict_to_expand[key] = _repeat_interleave_samples(
+                        dict_to_expand[key], lengths=list(image_nums), repeat_times=expand_size
+                    )
+                elif key == "pixel_values_videos" and video_grid_thw is not None:
+                    samples = torch.split(video_grid_thw, list(video_nums))
+                    lengths = [torch.prod(s, dim=1).sum() for s in samples]
+                    dict_to_expand[key] = _repeat_interleave_samples(
+                        dict_to_expand[key], lengths=lengths, repeat_times=expand_size
+                    )
+                elif key == "video_grid_thw":
+                    dict_to_expand[key] = _repeat_interleave_samples(
+                        dict_to_expand[key], lengths=list(video_nums), repeat_times=expand_size
+                    )
+                elif key == "second_per_grid_ts":
+                    dict_to_expand[key] = _repeat_interleave_samples(
+                        dict_to_expand[key], lengths=list(video_nums), repeat_times=expand_size
+                    )
+            return dict_to_expand
+
+        def _expand_dict_for_generation(dict_to_expand):
+            for key in dict_to_expand:
+                if (
+                    key != "cache_position"
+                    and dict_to_expand[key] is not None
+                    and isinstance(dict_to_expand[key], torch.Tensor)
+                    and key not in visual_keys
+                ):
+                    dict_to_expand[key] = dict_to_expand[key].repeat_interleave(expand_size, dim=0)
+            return dict_to_expand
+
+        model_kwargs = _expand_dict_for_generation_visual(model_kwargs)
+
+        if input_ids is not None:
+            input_ids = input_ids.repeat_interleave(expand_size, dim=0)
+
+        model_kwargs = _expand_dict_for_generation(model_kwargs)
+
+        if is_encoder_decoder:
+            if model_kwargs.get("encoder_outputs") is None:
+                raise ValueError(
+                    "If `is_encoder_decoder` is True, make sure that `encoder_outputs` is defined."
+                )
+            model_kwargs["encoder_outputs"] = _expand_dict_for_generation(
+                model_kwargs["encoder_outputs"]
+            )
+
+        return input_ids, model_kwargs
 
 
 __all__ = ["Qwen2_5_VLForConditionalGeneration", "Qwen2_5_VLModel", "Qwen2_5_VLPreTrainedModel"]

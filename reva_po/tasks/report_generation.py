@@ -901,13 +901,48 @@ class XrayReportGenerate(BaseTask):
                 pixel_values = outputs['pixel_values']
                 image_grid_thw = outputs['image_grid_thw']
 
-                # repeat image features to match N = B*G
-                # Must match HF's _expand_inputs_for_generation which uses
-                # repeat_interleave(G, dim=0) on all tensors during generate().
-                # Using any other ordering breaks consistency between generation
-                # and logprob computation, corrupting the PPO ratio.
-                pixel_values_repeat = pixel_values.repeat_interleave(group_size, dim=0)
-                image_grid_thw_repeat = image_grid_thw.repeat_interleave(group_size, dim=0)
+                # Expand pixel_values and image_grid_thw from [B, ...] to [B*G, ...]
+                # at the SAMPLE level, matching _expand_inputs_for_generation in
+                # modeling_qwen2_5_vl.py.  One sample may have multiple images (IU-Xray
+                # has 2 views), so we group all images per sample before repeating.
+                # Expand pixel_values and image_grid_thw from B to B*G samples.
+                # Count <|vision_start|> tokens in each sample's prompt to determine
+                # how many images it contains — handles variable images per sample and
+                # matches the corrected _expand_inputs_for_generation in
+                # modeling_qwen2_5_vl.py.
+                _VS_ID = 151652  # <|vision_start|> token id for Qwen2.5-VL
+                B_samples = len(outputs["gt_reports"])
+                _imgs_per_sample = [
+                    int((generated_ids[b * group_size,
+                                       :prompt_lens[b * group_size]] == _VS_ID).sum())
+                    for b in range(B_samples)
+                ]
+                _img_row_offs = [0]
+                for _c in _imgs_per_sample:
+                    _img_row_offs.append(_img_row_offs[-1] + _c)
+                assert _img_row_offs[-1] == image_grid_thw.shape[0], (
+                    f"vision tokens imply {_img_row_offs[-1]} images but "
+                    f"image_grid_thw has {image_grid_thw.shape[0]} rows"
+                )
+                _patch_cnts = (
+                    image_grid_thw[:, 0] * image_grid_thw[:, 1] * image_grid_thw[:, 2]
+                ).tolist()
+                _patch_offs = [0]
+                for _pc in _patch_cnts:
+                    _patch_offs.append(_patch_offs[-1] + int(_pc))
+                assert _patch_offs[-1] == pixel_values.shape[0], (
+                    f"patch offsets sum ({_patch_offs[-1]}) != "
+                    f"pixel_values rows ({pixel_values.shape[0]})"
+                )
+                _pv_slices, _igt_slices = [], []
+                for b in range(B_samples):
+                    r0, r1 = _img_row_offs[b], _img_row_offs[b + 1]
+                    p0, p1 = _patch_offs[r0], _patch_offs[r1]
+                    for _ in range(group_size):
+                        _pv_slices.append(pixel_values[p0:p1])
+                        _igt_slices.append(image_grid_thw[r0:r1])
+                pixel_values_repeat = torch.cat(_pv_slices, dim=0)
+                image_grid_thw_repeat = torch.cat(_igt_slices, dim=0)
                 assert len(pred_texts) == len(gt_texts)
 
                 # N = B*G
