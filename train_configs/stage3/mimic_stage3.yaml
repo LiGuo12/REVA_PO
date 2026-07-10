@@ -18,7 +18,7 @@ model:
   # RL configuration
   use_rl: True
   group_size: 4
-  update_ref_every: 2
+  update_ref_every: 3
   update_old_every: 16
   ent_coef: 0.0
   b_min: 0.05
