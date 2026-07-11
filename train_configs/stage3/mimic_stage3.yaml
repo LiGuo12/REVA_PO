@@ -58,7 +58,7 @@ run:
   log_freq: 50
   max_epoch: 9
   batch_size_train: 1 # train batch size per gpu
-  batch_size_eval: 1 # eval batch size per gpu
+  batch_size_eval: 1 # eval batch size per gpu # If set bs_eval>1, please uncomment the line "self.qwen_processor.tokenizer.padding_side = "left"" in reva.py
   num_workers: 2 # of workers for data loading
   accum_grad_iters: 1
 
