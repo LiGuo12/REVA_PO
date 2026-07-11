@@ -2,10 +2,11 @@
 
 **Accepted to ECCV 2026**
 
-[![Paper]] 
+![Paper](https://img.shields.io/badge/Paper-Coming%20soon-blue)
 [![GitHub stars](https://img.shields.io/github/stars/LiGuo12/REVA_PO?style=social)](https://github.com/LiGuo12/REVA_PO/stargazers)
 [![Models](https://img.shields.io/badge/Models-HuggingFace-yellow)](https://huggingface.co/liguo12/REVA_PO_Weights)
 [![Datasets](https://img.shields.io/badge/Datasets-HuggingFace-yellow)](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets)
+
 ## Overview
 
 ![overview](images/pipeline.png)
@@ -355,16 +356,6 @@ deepspeed --num_gpus 8 train.py \
   --use_zero_optimizer \
   --deepspeed_config train_configs/stage3/zero_iuxray_stage3.json
 ```
-
-## Star History
-
-<a href="https://www.star-history.com/#LiGuo12/REVA_PO&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=LiGuo12/REVA_PO&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=LiGuo12/REVA_PO&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=LiGuo12/REVA_PO&type=Date" />
-  </picture>
-</a>
 
 ## Citation
 
