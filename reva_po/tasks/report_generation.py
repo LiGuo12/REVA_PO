@@ -22,11 +22,16 @@ import os
 from tqdm import tqdm
 from pathlib import Path
 import json, gzip
-from typing import List
 import concurrent.futures
-from typing import List, Sequence
 from radgraph import F1RadGraph
-
+from typing import Dict, Optional, Union, List, Sequence
+import CheXbert.src.utils as utils
+from CheXbert.src.models.bert_labeler import bert_labeler
+from CheXbert.src.constants import CONDITIONS, PAD_IDX
+from transformers import BertTokenizer
+import torch.nn as nn
+import pandas as pd
+from collections import OrderedDict
 
 
 @registry.register_task("chestxray_multilabel_cls")
@@ -489,6 +494,25 @@ class XrayReportGenerate(BaseTask):
                     group = dist.new_group(ranks=ranks, backend="gloo")
                     if global_rank in ranks:
                         self._node_group = group
+        
+        self.chexbert = None
+        is_rank0 = (not is_dist_avail_and_initialized()) or dist.get_rank() == 0
+        if (cfg is not None) and is_rank0:
+            use_chexbert = cfg.config.model.get("use_chexbert", False)
+            if use_chexbert:
+                ckpt = cfg.config.model.get("chexbert_ckpt", None)
+                if ckpt is None:
+                    raise ValueError("chexbert_ckpt is required when use_chexbert=True")
+                dev = cfg.config.model.get(
+                    "chexbert_device",
+                    "cpu",
+                )
+                bs = int(cfg.config.model.get("chexbert_bs", 16))
+                self.chexbert = CheXbertBatch(
+                    checkpoint_path=ckpt,
+                    device=dev,
+                    batch_size=bs,
+                )
 
     def get_last_eval_payload(self):
         """After the evaluation is completed, the main process can read the complete sample-level output of the most recent evaluation."""
@@ -1647,6 +1671,28 @@ class XrayReportGenerate(BaseTask):
                         agg_metrics += 0.1 * float(val_metrics.get("RG_ER", 0.0))
                 val_metrics["agg_metrics"] = float(agg_metrics)
 
+                if getattr(self, "chexbert", None) is not None:
+                    preds_text = [p for (p, _) in valid_pairs]
+                    gts_text = [g for (_, g) in valid_pairs]
+
+                    # move to GPU before eval — also update self.chexbert.device so
+                    # __call__ sends input tensors to the same device as the model
+                    eval_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                    self.chexbert.model.to(eval_device)
+                    self.chexbert.device = eval_device
+
+                    pred_labels = self.chexbert(preds_text)  # list of dict
+                    gt_labels = self.chexbert(gts_text)
+
+                    chexbert_metrics = self.chexbert_micro_f1_pos(
+                        pred_labels, gt_labels, treat_uncertain_as_positive=False
+                    )
+                    val_metrics["Chexbert_P"] = chexbert_metrics['precision']
+                    val_metrics["Chexbert_R"] = chexbert_metrics['recall']
+                    val_metrics["Chexbert_F1"] = chexbert_metrics['f1']
+                else:
+                    pass
+
                 metrics_str = "Metrics |"
                 for metric, score in eval_results.items():
                     if metric in ["valid_samples", "empty_samples", "total_samples"]:
@@ -1664,7 +1710,7 @@ class XrayReportGenerate(BaseTask):
                         print('\n')
 
             except Exception as e:
-                print(f"Error computing NLP metrics: {e}")
+                print(f"Error computing metrics: {e}")
 
         # Add sample statistics to metrics
         val_metrics.update({
@@ -1673,6 +1719,14 @@ class XrayReportGenerate(BaseTask):
             'total_samples': len(predictions)
         })
 
+        # ---- free eval GPU memory ----
+        if getattr(self, "chexbert", None) is not None:
+            try:
+                self.chexbert.model.to("cpu")
+                self.chexbert.device = torch.device("cpu")
+                torch.cuda.empty_cache()
+            except Exception:
+                pass
         # RadGraph cache: drop scorer to free GPU memory
         try:
             cache = getattr(self, "_eval_rg_scorer_cache", None)
@@ -1789,7 +1843,54 @@ class XrayReportGenerate(BaseTask):
                 cnt += 1
 
         return total / max(cnt, 1)
-     
+    
+    def chexbert_micro_f1_pos(
+        self,
+        pred_labels: List[Dict[str, Optional[int]]],
+        gt_labels: List[Dict[str, Optional[int]]],
+        treat_uncertain_as_positive: bool = False,
+    ) -> float:
+        """
+        Micro-F1 over CONDITIONS, treating label==1 as positive.
+        - If gt is None for a condition, skip that condition for that sample.
+        - pred None counts as non-positive.
+        """
+        assert len(pred_labels) == len(gt_labels)
+
+        tp = 0
+        fp = 0
+        fn = 0
+
+        for p, g in zip(pred_labels, gt_labels):
+            for c in CONDITIONS:
+                gv = g.get(c, None)
+                pv = p.get(c, None)
+
+                #if gv is None:
+                #    continue  # skip missing gt label
+
+                # define positive
+                g_pos = (gv == 1) or (treat_uncertain_as_positive and gv == -1)
+                p_pos = (pv == 1) or (treat_uncertain_as_positive and pv == -1)
+
+                if p_pos and g_pos:
+                    tp += 1
+                elif p_pos and (not g_pos):
+                    fp += 1
+                elif (not p_pos) and g_pos:
+                    fn += 1
+
+        precision_denom = tp + fp
+        recall_denom = tp + fn
+
+        precision = float(tp) / float(precision_denom) if precision_denom > 0 else 0.0
+        recall = float(tp) / float(recall_denom) if recall_denom > 0 else 0.0
+
+        f1_denom = 2 * tp + fp + fn
+        f1 = float(2 * tp) / float(f1_denom) if f1_denom > 0 else 0.0
+
+        return {"precision": precision, "recall": recall, "f1": f1}
+    
     def valid_step(self, model, samples):
         """
         Validation step that computes ITC and ITM losses without gradients
@@ -1861,7 +1962,8 @@ class XrayReportGenerate(BaseTask):
                 k.startswith(f"{split_name}/ROUGE") or \
                 k.startswith(f"{split_name}/CIDEr") or \
                 k.startswith(f"{split_name}/METEOR") or \
-                k.startswith(f"{split_name}/RG"):
+                k.startswith(f"{split_name}/RG") or \
+                k.startswith(f"{split_name}/Chexbert"):
                 try:
                     print(f"{k}: {float(v):.4f}")
                 except Exception:
@@ -1869,3 +1971,110 @@ class XrayReportGenerate(BaseTask):
         print("\n")
 
         return log_stats
+
+
+_CLASS_TO_LABEL = {0: None, 1: 1, 2: 0, 3: -1}
+
+def _clean_text_like_repo(text: Optional[str]) -> str:
+    if not isinstance(text, str):
+        return ""
+    s = text.strip()
+    ser = pd.Series([s])
+    ser = ser.replace("\n", " ", regex=True)
+    ser = ser.replace(r"\s+", " ", regex=True)
+    return str(ser.iloc[0]).strip()
+
+
+def _encode_one_like_repo(text: str, tokenizer: BertTokenizer, max_len: int = 512) -> List[int]:
+    if isinstance(text, str) and text.strip():
+        enc = tokenizer(
+            text,
+            add_special_tokens=True,
+            truncation=True,
+            max_length=max_len,
+            return_attention_mask=False,
+            return_token_type_ids=False,
+        )
+        ids = enc["input_ids"]
+        if len(ids) == max_len and ids[-1] != tokenizer.sep_token_id:
+            ids[-1] = tokenizer.sep_token_id
+        return ids
+    return [tokenizer.cls_token_id, tokenizer.sep_token_id]
+
+
+class CheXbertBatch:
+    def __init__(
+        self,
+        checkpoint_path: str,
+        device: Optional[Union[str, torch.device]] = None,
+        max_len: int = 512,
+        batch_size: int = 16,
+    ):
+        self.max_len = int(max_len)
+        self.batch_size = int(batch_size)
+
+        if device is None:
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device(device) if not isinstance(device, torch.device) else device
+
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+
+        model = bert_labeler()
+
+        if self.device.type == "cuda" and torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model).to(self.device)
+            checkpoint = torch.load(checkpoint_path)
+            model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            new_state = OrderedDict()
+            for k, v in checkpoint["model_state_dict"].items():
+                if k.startswith("module."):
+                    new_state[k[len("module."):]] = v
+                else:
+                    new_state[k] = v
+            model.load_state_dict(new_state)
+            model = model.to(self.device)
+
+        self.model = model
+        self.model.eval()
+
+    @torch.no_grad()
+    def __call__(self, reports: List[str]) -> List[Dict[str, Optional[int]]]:
+        """
+        Return: list of dict, each dict maps condition -> {1,0,-1,None}
+        """
+        outs: List[Dict[str, Optional[int]]] = []
+
+        # pre-clean and encode
+        encoded: List[List[int]] = []
+        for r in reports:
+            cleaned = _clean_text_like_repo(r)
+            ids = _encode_one_like_repo(cleaned, self.tokenizer, max_len=self.max_len)
+            encoded.append(ids)
+
+        # mini-batch forward
+        n = len(encoded)
+        for st in range(0, n, self.batch_size):
+            ed = min(st + self.batch_size, n)
+            chunk = encoded[st:ed]
+
+            seqs = [torch.tensor(x, dtype=torch.long) for x in chunk]
+            batch = torch.nn.utils.rnn.pad_sequence(
+                seqs, batch_first=True, padding_value=PAD_IDX
+            ).to(self.device)
+            lengths = [int(x.numel()) for x in seqs]
+            attn_mask = utils.generate_attention_masks(batch, lengths, self.device)
+
+            out = self.model(batch, attn_mask)  # list len=14, each (B, C)
+
+            # decode per sample
+            B = batch.size(0)
+            for i in range(B):
+                preds_i: List[Optional[int]] = []
+                for j in range(len(out)):
+                    cls = int(out[j][i].argmax(dim=-1).item())
+                    preds_i.append(_CLASS_TO_LABEL.get(cls, None))
+                outs.append({cond: preds_i[k] for k, cond in enumerate(CONDITIONS)})
+
+        return outs

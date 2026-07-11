@@ -55,6 +55,7 @@ class REVA_stage3(BaseModel):
         print("Base Model: ", model_name)
 
         self.qwen_processor = AutoProcessor.from_pretrained(model_name, use_fast=False)
+        # self.qwen_processor.tokenizer.padding_side = "left" # If inference batch size >1, uncomment this line
         self.qwen_tokenizer = self.qwen_processor.tokenizer
         self.end_sym = self.qwen_processor.tokenizer.eos_token
 
@@ -503,6 +504,10 @@ class REVA_stage3(BaseModel):
                 print("Load Stage 3 Checkpoint: {}".format(ckpt_path))
                 ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
                 msg = model.load_state_dict(ckpt['model'], strict=False)
+                if msg.unexpected_keys:
+                    print("Stage 3 checkpoint unexpected keys:", msg.unexpected_keys)
+                else:
+                    print("Stage 3 checkpoint loaded successfully.")
         return model
     
 # REVA Stage 2 Classifier-Guided SFT 
@@ -549,6 +554,7 @@ class REVA_stage2(BaseModel):
         )
         
         self.qwen_processor = AutoProcessor.from_pretrained(model_name)
+        # self.qwen_processor.tokenizer.padding_side = "left" # If inference batch size >1, uncomment this line
         self.qwen_tokenizer = self.qwen_processor.tokenizer
         self.max_txt_len = max_txt_len
         self.end_sym = self.qwen_processor.tokenizer.eos_token
@@ -985,6 +991,10 @@ class REVA_stage2(BaseModel):
                 print("Load Stage 2 Checkpoint: {}".format(ckpt_path))
                 ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
                 msg = model.load_state_dict(ckpt['model'], strict=False)
+                if msg.unexpected_keys:
+                    print("Stage 2 checkpoint unexpected keys:", msg.unexpected_keys)
+                else:
+                    print("Stage 2 checkpoint loaded successfully.")
         return model
     
 # REVA Stage 1 Warmup
@@ -1019,7 +1029,8 @@ class REVA_stage1(BaseModel):
             model_name, torch_dtype=torch.float16, device_map=None
         )
         self.qwen_processor = AutoProcessor.from_pretrained(model_name, use_fast=False)
-        self.qwen_tokenizer = self.qwen_processor.tokenizer
+        # self.qwen_processor.tokenizer.padding_side = "left"  # If inference batch size >1, uncomment this line
+        self.qwen_tokenizer = self.qwen_processor.tokenizer 
         self.max_txt_len = max_txt_len
         self.end_sym = self.qwen_processor.tokenizer.eos_token
         
@@ -1261,6 +1272,10 @@ class REVA_stage1(BaseModel):
                 print("Load Stage 1 Checkpoint: {}".format(ckpt_path))
                 ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
                 msg = model.load_state_dict(ckpt['model'], strict=False)
+                if msg.unexpected_keys:
+                    print("Stage 1 checkpoint unexpected keys:", msg.unexpected_keys)
+                else:
+                    print("Stage 1 checkpoint loaded successfully.")
         return model
     
 # train classifier

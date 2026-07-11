@@ -1,5 +1,9 @@
 # REVA-PO: Stabilizing Reinforcement Learning for Chest X-ray Report Generation
 
+**Accepted to ECCV 2026**
+
+[Paper] · [Code](https://github.com/LiGuo12/REVA_PO/tree/main) · [Models](https://huggingface.co/liguo12/REVA_PO_Weights/tree/main) · [Datasets](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets/tree/main)
+
 ## Overview
 
 ![overview](images/pipeline.png)
@@ -36,8 +40,7 @@ Put the annotations and images (files) from the official website into the same f
 mimic_dataset/
 ├── files/
 ├── mimic_with_categories.json/
-├── mimic_with_categories_sampled_10k.json/
-└── mimic_test_split_chexpert_categories.csv
+└── mimic_with_categories_sampled_10k.json/
 ```
 ### Pretrained Checkpoints
 
@@ -83,15 +86,16 @@ Update:
 
 Set these fields to your local paths:
 
-- `pretrained_cls_ckp` (line 39): path to `mimic_cls_ckpt.pth`
-- `pretrained_stage2` (line 40): path to `mimic_stage2_ckpt.pth`
-- `pretrained_stage3` (line 41): path to `mimic_stage3_ckpt.pth`
-- `storage` (line 50): path to `mimic_dataset/`
-- `ann_file` (line 51): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
+- `chexbert_ckpt` (line 39): path to `chexbert.pth`
+- `pretrained_cls_ckp` (line 42): path to `mimic_cls_ckpt.pth`
+- `pretrained_stage2` (line 43): path to `mimic_stage2_ckpt.pth`
+- `pretrained_stage3` (line 44): path to `mimic_stage3_ckpt.pth`
+- `storage` (line 53): path to `mimic_dataset/`
+- `ann_file` (line 54): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
 
 Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 73)
+- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 76)
 - `train_configs/stage3/zero_mimic_stage3.json`: `train_batch_size` (line 34)
 
 Run:
@@ -102,22 +106,19 @@ deepspeed --num_gpus 8 train.py \
   --use_zero_optimizer \
   --deepspeed_config train_configs/stage3/zero_mimic_stage3.json
 ```
+## Results
 
-![overview](images/results.png)
+### Main Results
 
-For clinical efficacy (CE) metrics, run:
+<p align="center">
+  <img src="images/results.png" alt="Main report generation results" width="95%">
+</p>
 
-```bash
-python compute_ce.py --data_root /path/to/mimic_dataset
-```
+### MIMIC Clinical Efficacy Results
 
-By default, the script computes CE metrics for the latest evaluation outputs. To compute CE metrics for a previous run, specify the run timestamp:
-
-```bash
-python compute_ce.py --data_root /path/to/mimic_dataset  --run_ts <timestamp>
-# Example:
-python compute_ce.py --data_root /path/to/mimic_dataset --run_ts 20260106175
-```
+<p align="center">
+  <img src="images/results_ce.png" alt="MIMIC clinical efficacy results" width="85%">
+</p>
 
 ## Training
 
@@ -211,19 +212,19 @@ Update:
 
 Set these fields to your local paths:
 
-- `evaluate` (line 43): set to False
-- `pretrained_cls_ckp` (line 39): path to `mimic_cls_ckpt.pth`
-- `pretrained_stage2` (line 40): path to `mimic_stage2_ckpt.pth`
+- `evaluate` (line 46): set to False
+- `pretrained_cls_ckp` (line 42): path to `mimic_cls_ckpt.pth`
+- `pretrained_stage2` (line 43): path to `mimic_stage2_ckpt.pth`
   
   Note: This line can be either a checkpoint we provide or a stage 2 checkpoint from your previous training.
-- `storage` (line 50): path to `mimic_dataset/`
-- `ann_file` (line 51): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
+- `storage` (line 53): path to `mimic_dataset/`
+- `ann_file` (line 54): path to `mimic_dataset/mimic_with_categories_sampled_10k.json`
   
   Note: This includes randomly sampling 10K instances from the MIMIC-CXR training split to reduce the runtime of RL training. The validation and test splits remain unchanged.
 
 Adjust the following settings based on the number of GPUs available:
 
-- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 73)
+- `train_configs/stage3/mimic_stage3.yaml`: `world_size` (line 76)
 - `train_configs/stage2/zero_mimic_stage2.json`: `train_batch_size` (line 34)
 
 Run:
@@ -351,3 +352,18 @@ deepspeed --num_gpus 8 train.py \
   --cfg-path train_configs/stage3/iuxray_stage3.yaml \
   --use_zero_optimizer \
   --deepspeed_config train_configs/stage3/zero_iuxray_stage3.json
+```
+
+## Citation
+
+If you find our work helpful, please cite:
+
+```bibtex
+@misc{li2026revapo,
+  title         = {REVA-PO: Stabilizing Reinforcement Learning for Chest X-ray Report Generation},
+  author        = {Li Guo, Anas M. Tahir, and Z. Jane Wang},
+  year          = {2026},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+```
