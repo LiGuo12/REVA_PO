@@ -120,7 +120,7 @@ deepspeed --num_gpus 8 train.py \
 ### MIMIC Clinical Efficacy Results
 
 <p align="center">
-  <img src="images/results_ce.png" alt="MIMIC clinical efficacy results" width="65%">
+  <img src="images/results_ce.png" alt="MIMIC clinical efficacy results" width="55%">
 </p>
 
 ## Training
