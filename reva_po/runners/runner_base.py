@@ -413,8 +413,6 @@ class RunnerBase:
             logging.info("No validation splits found.")
         return valid_splits
 
-        return valid_splits
-
     @property
     def test_splits(self):
         test_splits = self.config.run_cfg.get("test_splits", [])
