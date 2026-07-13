@@ -719,13 +719,18 @@ class XrayReportGenerate(BaseTask):
             logits_labels = torch.gather(logits, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
             logsumexp_values = torch.logsumexp(logits, dim=-1)
             logprobs_labels = logits_labels - logsumexp_values
+
         else:
+            upcast = logits.dtype == torch.bfloat16
             logprobs_labels = []
             for row_logits, row_labels in zip(logits, labels):
+                if upcast:
+                    row_logits = row_logits.float()
                 row_logprobs = F.log_softmax(row_logits, dim=-1)
                 row_logprobs_labels = row_logprobs.gather(dim=-1, index=row_labels.unsqueeze(-1)).squeeze(-1)
                 logprobs_labels.append(row_logprobs_labels)
             logprobs_labels = torch.stack(logprobs_labels)
+
         return logprobs_labels
     
     def _reload_best_model(self, model, output_dir):
