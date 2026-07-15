@@ -3,7 +3,6 @@
 **Accepted to ECCV 2026**
 
 ![Paper](https://img.shields.io/badge/Paper-Coming%20soon-blue)
-[![GitHub stars](https://img.shields.io/github/stars/LiGuo12/REVA_PO?style=social)](https://github.com/LiGuo12/REVA_PO/stargazers)
 [![Models](https://img.shields.io/badge/Models-HuggingFace-yellow)](https://huggingface.co/liguo12/REVA_PO_Weights)
 [![Datasets](https://img.shields.io/badge/Datasets-HuggingFace-yellow)](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets)
 
