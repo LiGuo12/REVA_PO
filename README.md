@@ -2,7 +2,7 @@
 
 **Accepted to ECCV 2026**
 
-[![Paper](https://img.shields.io/badge/Paper-arXiv-blue)](https://arxiv.org/abs/2607.10147)
+[![arXiv](https://img.shields.io/badge/arXiv-2607.10147-b31b1b.svg)](https://arxiv.org/abs/2607.10147)
 [![Models](https://img.shields.io/badge/Models-HuggingFace-yellow)](https://huggingface.co/liguo12/REVA_PO_Weights)
 [![Datasets](https://img.shields.io/badge/Datasets-HuggingFace-yellow)](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets)
 
