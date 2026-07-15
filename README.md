@@ -2,7 +2,7 @@
 
 **Accepted to ECCV 2026**
 
-![Paper](https://img.shields.io/badge/Paper-Coming%20soon-blue)
+![Paper]((https://arxiv.org/abs/2607.10147)-blue)
 [![Models](https://img.shields.io/badge/Models-HuggingFace-yellow)](https://huggingface.co/liguo12/REVA_PO_Weights)
 [![Datasets](https://img.shields.io/badge/Datasets-HuggingFace-yellow)](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets)
 
@@ -361,11 +361,13 @@ deepspeed --num_gpus 8 train.py \
 If you find our work helpful, please cite:
 
 ```bibtex
-@misc{li2026revapo,
-  title         = {REVA-PO: Stabilizing Reinforcement Learning for Chest X-ray Report Generation},
-  author        = {Li Guo, Anas M. Tahir, and Z. Jane Wang},
-  year          = {2026},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.CV},
+@misc{guo2026revapo,
+      title={REVA-PO: Stabilizing Reinforcement Learning for Chest X-ray Report Generation}, 
+      author={Li Guo and Anas M. Tahir and Z. Jane Wang},
+      year={2026},
+      eprint={2607.10147},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2607.10147}, 
 }
 ```
