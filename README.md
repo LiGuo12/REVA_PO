@@ -20,9 +20,7 @@ Install requirements using pip:
 pip install -r requirements.txt
 ```
 
-**2. Preparation**
-
-### Datasets
+**2. Datasets**
 
 IU-Xray: Download the [IU-Xray](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets/tree/main/iuxray_dataset) and unzip `images.zip`. 
 
@@ -44,7 +42,8 @@ mimic_dataset/
 ├── mimic_with_categories.json/
 └── mimic_with_categories_sampled_10k.json/
 ```
-### Pretrained Checkpoints
+
+**3. Pretrained Checkpoints**
 
 IU-Xray: Download our pretrained checkpoints for IU-Xray from [here](https://huggingface.co/liguo12/REVA_PO_Weights/tree/main/iuxray).
 
