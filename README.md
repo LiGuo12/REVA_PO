@@ -112,7 +112,7 @@ deepspeed --num_gpus 8 train.py \
 ### Main Results
 
 <p align="center">
-  <img src="images/main_results.png" alt="Main report generation results" width="95%">
+  <img src="images/main_results.pdf" alt="Main report generation results" width="95%">
 </p>
 
 ### MIMIC Clinical Efficacy Results
