@@ -8,7 +8,7 @@
 
 ## Overview
 
-![overview](images/pipeline.png)
+![overview](images/overall_pipeline.png)
 
 ## Installation
 
