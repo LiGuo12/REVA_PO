@@ -360,13 +360,12 @@ deepspeed --num_gpus 8 train.py \
 If you find our work helpful, please cite:
 
 ```bibtex
-@misc{guo2026revapo,
-      title={REVA-PO: Stabilizing Reinforcement Learning for Chest X-ray Report Generation}, 
-      author={Li Guo and Anas M. Tahir and Z. Jane Wang},
-      year={2026},
-      eprint={2607.10147},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2607.10147}, 
+@inproceedings{guo2026reva,
+  title={REVA-PO: Stabilizing Reinforcement Learning for Chest X-Ray Report Generation},
+  author={Guo, Li and Tahir, Anas M and Wang, Z Jane},
+  booktitle={European Conference on Computer Vision},
+  pages={565--583},
+  year={2026},
+  organization={Springer}
 }
 ```
