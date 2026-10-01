@@ -1,7 +1,6 @@
 # REVA-PO: Stabilizing Reinforcement Learning for Chest X-ray Report Generation
 
-**Accepted to ECCV 2026**
-
+[![ECCV 2026](https://img.shields.io/badge/ECCV-2026-1565C0.svg)](https://link.springer.com/chapter/10.1007/978-3-032-37321-2_31)
 [![arXiv](https://img.shields.io/badge/arXiv-2607.10147-b31b1b.svg)](https://arxiv.org/abs/2607.10147v2)
 [![Models](https://img.shields.io/badge/Models-HuggingFace-FFD21E.svg)](https://huggingface.co/liguo12/REVA_PO_Weights)
 [![Datasets](https://img.shields.io/badge/Datasets-HuggingFace-FFD21E.svg)](https://huggingface.co/datasets/liguo12/REVA_PO_Datasets)
